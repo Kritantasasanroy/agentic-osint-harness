@@ -1,0 +1,188 @@
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Self
+
+import httpx
+import pytest
+
+from osint_harness.domain.provenance import Document
+from osint_harness.sources.cassette import (
+    Cassette,
+    CassetteMissError,
+    CassetteMode,
+    RecordedCall,
+)
+from osint_harness.sources.tools import (
+    Encyclopedia,
+    EncyclopediaResponse,
+    PageFetch,
+    PlainText,
+    Tool,
+)
+
+FIXED_TIME = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+
+
+def _document(url: str = "https://example.com/a", text: str = "body") -> Document:
+    return Document.retrieved(url=url, title="t", text=text, retrieved_at=FIXED_TIME)
+
+
+class CountingTool(Tool):
+    """A tool that records how often it actually reached its source."""
+
+    def __init__(self, cassette: Cassette) -> None:
+        super().__init__(cassette)
+        self.live_calls = 0
+
+    @property
+    def name(self) -> str:
+        return "counting"
+
+    def retrieve(self, query: str) -> tuple[Document, ...]:
+        self.live_calls += 1
+        return (_document(text=f"fetched for {query}"),)
+
+
+class FakeResponse:
+    """Stands in for an httpx response so tests never reach the network."""
+
+    def __init__(
+        self,
+        payload: object = None,
+        text: str = "",
+        url: str = "https://example.com",
+    ) -> None:
+        self._payload = payload
+        self.text = text
+        self.url = url
+
+    def json(self) -> object:
+        return self._payload
+
+    def raise_for_status(self) -> Self:
+        return self
+
+
+class TestCassetteKeys:
+    def test_key_is_stable_for_the_same_lookup(self) -> None:
+        assert Cassette.key_for("web", "Acme Corp") == Cassette.key_for("web", "Acme Corp")
+
+    def test_key_ignores_incidental_whitespace(self) -> None:
+        assert Cassette.key_for("web", "Acme  Corp\n") == Cassette.key_for("web", "Acme Corp")
+
+    def test_different_tools_asking_the_same_question_do_not_collide(self) -> None:
+        assert Cassette.key_for("web", "Acme") != Cassette.key_for("encyclopedia", "Acme")
+
+
+class TestCassetteStorage:
+    def test_round_trip_preserves_documents_exactly(self, tmp_path: Path) -> None:
+        cassette = Cassette(mode=CassetteMode.RECORD)
+        key = Cassette.key_for("web", "Acme")
+        cassette.record(key, RecordedCall(tool="web", query="Acme", documents=(_document(),)))
+        path = tmp_path / "nested" / "cassette.json"
+        cassette.save(path)
+
+        reloaded = Cassette.load(path)
+        assert reloaded.replay(key) == (_document(),)
+        assert reloaded.replay(key)[0].retrieved_at == FIXED_TIME
+
+    def test_loading_a_missing_file_starts_empty_rather_than_failing(self, tmp_path: Path) -> None:
+        cassette = Cassette.load(tmp_path / "absent.json")
+        assert cassette.calls == {}
+
+    def test_mode_is_not_written_into_the_recording(self, tmp_path: Path) -> None:
+        path = tmp_path / "c.json"
+        Cassette(mode=CassetteMode.RECORD).save(path)
+        assert "record" not in path.read_text(encoding="utf-8")
+
+    def test_replaying_an_unrecorded_key_is_an_error_not_an_empty_result(self) -> None:
+        with pytest.raises(CassetteMissError):
+            Cassette().replay("nope")
+
+
+class TestToolReplay:
+    def test_replay_mode_refuses_to_reach_the_network_on_a_miss(self) -> None:
+        tool = CountingTool(Cassette(mode=CassetteMode.REPLAY))
+        with pytest.raises(CassetteMissError, match="counting"):
+            tool.gather("Acme")
+        assert tool.live_calls == 0
+
+    def test_recording_mode_fetches_once_then_replays(self) -> None:
+        tool = CountingTool(Cassette(mode=CassetteMode.RECORD))
+        first = tool.gather("Acme")
+        second = tool.gather("Acme")
+        assert first == second
+        assert tool.live_calls == 1
+
+    def test_a_recorded_run_replays_without_the_source(self) -> None:
+        recording = Cassette(mode=CassetteMode.RECORD)
+        CountingTool(recording).gather("Acme")
+
+        replaying = Cassette(calls=recording.calls, mode=CassetteMode.REPLAY)
+        tool = CountingTool(replaying)
+        assert tool.gather("Acme")[0].text == "fetched for Acme"
+        assert tool.live_calls == 0
+
+
+class TestPlainText:
+    def test_drops_script_and_style_content(self) -> None:
+        html = "<html><body><script>evil()</script><p>Real text</p><style>p{}</style></body></html>"
+        assert PlainText.of(html) == "Real text"
+
+    def test_collapses_whitespace_runs(self) -> None:
+        assert PlainText.of("<p>a\n\n   b</p>") == "a b"
+
+    def test_keeps_text_from_unclosed_markup(self) -> None:
+        assert "kept" in PlainText.of("<div><p>kept")
+
+
+class TestEncyclopediaResponse:
+    def test_parses_the_mediawiki_shape(self) -> None:
+        parsed = EncyclopediaResponse.model_validate(
+            {"query": {"pages": {"42": {"pageid": 42, "title": "Acme", "extract": "A company."}}}}
+        )
+        assert parsed.articles()[0].title == "Acme"
+
+    def test_discards_articles_with_no_text(self) -> None:
+        parsed = EncyclopediaResponse.model_validate(
+            {
+                "query": {
+                    "pages": {
+                        "1": {"pageid": 1, "title": "Empty", "extract": "   "},
+                        "2": {"pageid": 2, "title": "Real", "extract": "Text."},
+                    }
+                }
+            }
+        )
+        assert [article.title for article in parsed.articles()] == ["Real"]
+
+    def test_an_empty_reply_yields_no_articles(self) -> None:
+        assert EncyclopediaResponse.model_validate({}).articles() == ()
+
+
+class TestEncyclopediaRetrieval:
+    def test_builds_an_article_url_from_the_title(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {
+            "query": {"pages": {"7": {"pageid": 7, "title": "Acme Corp", "extract": "A firm."}}}
+        }
+        monkeypatch.setattr(httpx, "get", lambda *_args, **_kwargs: FakeResponse(payload=payload))
+        documents = Encyclopedia(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme")
+        assert documents[0].url == "https://en.wikipedia.org/wiki/Acme_Corp"
+        assert documents[0].source_domain == "en.wikipedia.org"
+
+
+class TestPageFetchRetrieval:
+    def test_extracts_readable_text_and_keeps_the_final_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            httpx,
+            "get",
+            lambda *_args, **_kwargs: FakeResponse(
+                text="<html><body><p>Acme filed accounts.</p></body></html>",
+                url="https://reuters.com/article/1",
+            ),
+        )
+        documents = PageFetch(Cassette(mode=CassetteMode.RECORD)).retrieve("https://reuters.com/x")
+        assert documents[0].text == "Acme filed accounts."
+        assert documents[0].source_domain == "reuters.com"
