@@ -3,7 +3,13 @@ from itertools import pairwise
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from osint_harness.domain.analysis import Assessment, Evidence, Hypothesis, Judgment
+from osint_harness.domain.analysis import (
+    Assessment,
+    Evidence,
+    Findings,
+    Hypothesis,
+    Judgment,
+)
 from osint_harness.domain.provenance import Document, SourceReliability
 from osint_harness.domain.subject import AnySubject
 
@@ -149,6 +155,7 @@ class Investigation(BaseModel):
     steps: list[Step] = Field(default_factory=list)
     source_grades: dict[str, SourceReliability] = Field(default_factory=dict)
     recalled_priors: tuple[str, ...] = ()
+    findings: Findings = Field(default_factory=Findings)
 
     @classmethod
     def open(
@@ -189,6 +196,14 @@ class Investigation(BaseModel):
             )
         self.evidence[evidence.identifier] = evidence
         return evidence.identifier
+
+    def grade_source(self, domain: str, reliability: SourceReliability) -> None:
+        """Apply a publisher's reliability grade for the remainder of this investigation."""
+        self.source_grades[domain] = reliability
+
+    def record_findings(self, findings: Findings) -> None:
+        """Attach the written report produced by dissemination."""
+        self.findings = findings
 
     def assess(self, assessment: Assessment) -> None:
         """Append an assessment; the series is never overwritten, so progression survives."""

@@ -120,6 +120,21 @@ class Hypothesis(BaseModel):
         )
 
 
+class Findings(BaseModel):
+    """The narrative half of the analytic product: what was concluded, what is missing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str = ""
+    key_findings: tuple[str, ...] = ()
+    gaps: tuple[str, ...] = ()
+    conflicts: tuple[str, ...] = ()
+
+    def is_written(self) -> bool:
+        """Whether dissemination has actually produced a report."""
+        return bool(self.summary)
+
+
 class Assessment(BaseModel):
     """The conclusion at one moment: a judgment, a confidence, and the reasoning for both."""
 
