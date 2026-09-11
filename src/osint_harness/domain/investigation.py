@@ -92,6 +92,21 @@ class Lead(BaseModel):
         return self.state is LeadState.OPEN
 
 
+class Recollection(BaseModel):
+    """Something carried in from an earlier investigation: a lead to check, never evidence.
+
+    It keeps the episode it came from and how strongly it matched, so a recall that sent an
+    investigation the wrong way can be identified afterwards rather than merely suspected.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str = Field(min_length=1)
+    from_run: str = Field(min_length=1)
+    about: str = ""
+    similarity: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
 class Budget(BaseModel):
     """The ceiling on one episode: how many steps, tool calls, and tokens it may spend."""
 
@@ -154,7 +169,7 @@ class Investigation(BaseModel):
     assessments: list[Assessment] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
     source_grades: dict[str, SourceReliability] = Field(default_factory=dict)
-    recalled_priors: tuple[str, ...] = ()
+    recalled_priors: tuple[Recollection, ...] = ()
     findings: Findings = Field(default_factory=Findings)
 
     @classmethod

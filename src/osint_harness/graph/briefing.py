@@ -47,7 +47,7 @@ class Briefing:
         priors = self._investigation.recalled_priors
         if not priors:
             return ""
-        lines = "\n".join(f"- {prior}" for prior in priors)
+        lines = "\n".join(f"- {prior.text}" for prior in priors)
         return (
             "RECALLED FROM EARLIER INVESTIGATIONS (unverified recall, NOT evidence; "
             "treat each as a lead to check, and never cite it):\n" + lines

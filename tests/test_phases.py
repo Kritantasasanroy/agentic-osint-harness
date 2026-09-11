@@ -11,6 +11,7 @@ from osint_harness.domain.investigation import (
     Lead,
     LeadPriority,
     MemoryMode,
+    Recollection,
     Step,
     UngroundedEvidenceError,
 )
@@ -421,7 +422,14 @@ class TestBriefingMemoryModes:
             run_id="r1", subject=Company(name="Acme Corp"), memory_mode=mode
         )
         investigation.leads.append(Lead(question="Who owns it?"))
-        investigation.recalled_priors = ("Acme was investigated in 2024 and looked clean.",)
+        investigation.recalled_priors = (
+            Recollection(
+                text="Acme was investigated in 2024 and looked clean.",
+                from_run="earlier-run",
+                about="Acme Corp",
+                similarity=0.9,
+            ),
+        )
         return Briefing(investigation).header()
 
     def test_none_withholds_the_working_state(self) -> None:
