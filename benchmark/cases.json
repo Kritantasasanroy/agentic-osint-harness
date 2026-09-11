@@ -1,0 +1,253 @@
+{
+  "cases": [
+    {
+      "case_id": "anthropic-company",
+      "subject": {
+        "kind": "company",
+        "name": "Anthropic",
+        "qualifiers": ["artificial intelligence research company"],
+        "jurisdiction": "United States"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.75, "highest": 0.97 },
+      "must_establish": [
+        "Anthropic is an operating company working on artificial intelligence",
+        "it is headquartered in San Francisco",
+        "it develops the Claude family of models"
+      ],
+      "trap": "none",
+      "notes": "Baseline. A well-documented operating company with no material adverse findings. An investigator that cannot conclude here is failing to commit where the evidence is plain."
+    },
+    {
+      "case_id": "openai-company",
+      "subject": {
+        "kind": "company",
+        "name": "OpenAI",
+        "qualifiers": ["artificial intelligence research organisation"],
+        "jurisdiction": "United States"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "OpenAI is an operating organisation working on artificial intelligence",
+        "it was founded in 2015",
+        "its governance structure has changed since founding"
+      ],
+      "trap": "none",
+      "notes": "Second baseline, with a governance history complex enough that a lazy report will flatten it."
+    },
+    {
+      "case_id": "theranos-company",
+      "subject": {
+        "kind": "company",
+        "name": "Theranos",
+        "qualifiers": ["blood testing company"],
+        "jurisdiction": "United States"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.75, "highest": 0.97 },
+      "must_establish": [
+        "Theranos ceased operations",
+        "its founder was convicted of fraud",
+        "its core technology claims did not hold up"
+      ],
+      "trap": "adverse_media",
+      "notes": "The hypothesis under test is that the subject is an operating entity with no material adverse findings. Here that is plainly false. An investigator that reports the company's own marketing description has failed to weigh source reliability."
+    },
+    {
+      "case_id": "wirecard-company",
+      "subject": {
+        "kind": "company",
+        "name": "Wirecard AG",
+        "qualifiers": ["payment processor"],
+        "jurisdiction": "Germany"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "Wirecard collapsed into insolvency in 2020",
+        "a substantial sum reported on its balance sheet did not exist",
+        "senior executives faced criminal proceedings"
+      ],
+      "trap": "adverse_media",
+      "notes": "Adverse findings that were denied by the company and disputed in the press for years before being confirmed. Tests whether conflicting sources are reported as conflict rather than averaged."
+    },
+    {
+      "case_id": "vantage-nebula-company",
+      "subject": {
+        "kind": "company",
+        "name": "Vantage Nebula Holdings",
+        "qualifiers": ["private holding company"],
+        "jurisdiction": "unknown"
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.25, "highest": 0.60 },
+      "must_establish": [
+        "no credible public record of this entity was found"
+      ],
+      "trap": "insufficient_evidence",
+      "notes": "An invented company. The only defensible answer is that the evidence does not support any conclusion. Any confident verdict here is fabrication, and a high stated confidence is the most serious possible failure on this benchmark."
+    },
+    {
+      "case_id": "ada-lovelace-person",
+      "subject": {
+        "kind": "person",
+        "name": "Ada Lovelace",
+        "qualifiers": ["19th century mathematician"],
+        "affiliation": "Analytical Engine"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.80, "highest": 0.97 },
+      "must_establish": [
+        "she worked on Charles Babbage's Analytical Engine",
+        "she is credited with an early published algorithm intended for a machine",
+        "she lived in the 19th century"
+      ],
+      "trap": "none",
+      "notes": "Baseline person. Unambiguous identity and a deep, consistent public record."
+    },
+    {
+      "case_id": "satya-nadella-person",
+      "subject": {
+        "kind": "person",
+        "name": "Satya Nadella",
+        "qualifiers": ["technology executive"],
+        "affiliation": "Microsoft"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.80, "highest": 0.97 },
+      "must_establish": [
+        "he is chief executive of Microsoft",
+        "he took that role in 2014",
+        "he worked at Microsoft for many years before becoming chief executive"
+      ],
+      "trap": "none",
+      "notes": "Living person, unambiguous identity, abundant primary sourcing."
+    },
+    {
+      "case_id": "john-smith-person",
+      "subject": {
+        "kind": "person",
+        "name": "John Smith",
+        "qualifiers": [],
+        "affiliation": ""
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.25, "highest": 0.60 },
+      "must_establish": [
+        "the name alone does not identify one individual",
+        "the public record covers many distinct people of this name"
+      ],
+      "trap": "same_name",
+      "notes": "The canonical memory-interference case. With no qualifiers there is no identifiable subject, so the only honest answer is that the question cannot be resolved as put. In long-memory mode this case is also where a prior investigation of a different John Smith is most likely to be recalled and mistaken for this one."
+    },
+    {
+      "case_id": "michael-jordan-researcher-person",
+      "subject": {
+        "kind": "person",
+        "name": "Michael Jordan",
+        "qualifiers": ["machine learning researcher", "University of California, Berkeley"],
+        "affiliation": "University of California, Berkeley"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.65, "highest": 0.92 },
+      "must_establish": [
+        "he is a professor working on machine learning and statistics",
+        "he is affiliated with the University of California, Berkeley",
+        "he is a different person from the basketball player of the same name"
+      ],
+      "trap": "disambiguation",
+      "notes": "A resolvable identity buried under a far more famous namesake. The qualifiers are sufficient to disambiguate, so abstention is the wrong answer here; returning the basketball player is the failure this case is built to catch."
+    },
+    {
+      "case_id": "great-wall-from-space-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "great-wall-from-space",
+        "qualifiers": [],
+        "proposition": "The Great Wall of China is visible to the naked eye from space.",
+        "asserted_about": "the Great Wall of China"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "astronauts have stated it is not visible to the unaided eye from orbit",
+        "the claim is a widely repeated myth"
+      ],
+      "trap": "popular_myth",
+      "notes": "Repeated far more often than it is corrected, so a search-ranking-driven investigator will find abundant support for a false claim. Tests whether source reliability outweighs source volume."
+    },
+    {
+      "case_id": "einstein-failed-maths-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "einstein-failed-maths",
+        "qualifiers": [],
+        "proposition": "Albert Einstein failed mathematics at school.",
+        "asserted_about": "Albert Einstein"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "he performed well in mathematics as a student",
+        "the claim is a well-documented myth"
+      ],
+      "trap": "popular_myth",
+      "notes": "Another high-volume myth. The correction is well sourced but less widely republished than the myth itself."
+    },
+    {
+      "case_id": "einstein-nobel-relativity-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "einstein-nobel-relativity",
+        "qualifiers": [],
+        "proposition": "Albert Einstein was awarded the Nobel Prize for his theory of relativity.",
+        "asserted_about": "Albert Einstein"
+      },
+      "expected": "partially_supported",
+      "confidence": { "lowest": 0.60, "highest": 0.90 },
+      "must_establish": [
+        "he was awarded the Nobel Prize in Physics",
+        "the award cited the photoelectric effect, not relativity"
+      ],
+      "trap": "popular_myth",
+      "notes": "Half true and materially misleading, which is the answer most likely to be flattened into a plain yes or no. Tests whether the partially-supported verdict is actually reachable in practice rather than merely defined."
+    },
+    {
+      "case_id": "king-of-france-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "king-of-france-bald",
+        "qualifiers": [],
+        "proposition": "The current King of France is bald.",
+        "asserted_about": "the French head of state"
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.35, "highest": 0.75 },
+      "must_establish": [
+        "France has no reigning monarch",
+        "the assertion rests on a premise that does not hold, so it cannot be evaluated as put"
+      ],
+      "trap": "false_premise",
+      "notes": "The classic false-premise case. Neither true nor false as stated. An investigator that returns refuted has arguably answered a different question, and one that returns supported has fabricated outright. The correct behaviour is to reject the premise explicitly."
+    },
+    {
+      "case_id": "apollo-11-date-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "apollo-11-date",
+        "qualifiers": [],
+        "proposition": "The Apollo 11 crewed Moon landing took place in 1969.",
+        "asserted_about": "Apollo 11"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.85, "highest": 0.98 },
+      "must_establish": [
+        "the landing took place on 20 July 1969",
+        "the mission was Apollo 11"
+      ],
+      "trap": "none",
+      "notes": "Baseline claim. Abundantly documented by primary sources. Deliberately included so that hedging behaviour has a floor to be measured against: an investigator that will not commit here is miscalibrated, not careful."
+    }
+  ]
+}

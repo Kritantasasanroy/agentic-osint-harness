@@ -179,6 +179,7 @@ class Investigation(BaseModel):
         subject: AnySubject,
         memory_mode: MemoryMode,
         budget: Budget | None = None,
+        recalled_priors: tuple[Recollection, ...] = (),
     ) -> "Investigation":
         """Start an episode with a baseline assessment, so the confidence series is never empty."""
         return cls(
@@ -186,6 +187,7 @@ class Investigation(BaseModel):
             subject=subject,
             memory_mode=memory_mode,
             budget=budget if budget is not None else Budget(),
+            recalled_priors=recalled_priors,
             assessments=[
                 Assessment(
                     judgment=Judgment.INSUFFICIENT_EVIDENCE,
