@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from osint_harness.bench.reward import StepReward
-from osint_harness.domain.analysis import Evidence, Hypothesis, Judgment
+from osint_harness.domain.analysis import Consistency, Evidence, Hypothesis, Judgment
 from osint_harness.domain.investigation import (
     Investigation,
     InvestigationPhase,
@@ -280,10 +280,29 @@ class TestTheRendererIsAlsoAGate:
         with pytest.raises(UngroundedEvidenceError, match="refusing to render"):
             Dossier(investigation).as_markdown()
 
-    def test_a_grounded_investigation_still_renders(self) -> None:
-        rendered = Dossier(Episode.with_stale_evidence(MemoryMode.SHORT)).as_markdown()
+    def test_the_json_record_is_guarded_too_not_just_the_markdown(self) -> None:
+        """Second re-audit finding: the first fix guarded `as_markdown` only, leaving `as_json` —
+        the record the harness calls its recomputability source of truth — safe purely because one
+        caller happened to invoke markdown first."""
+        investigation = Investigation.open(
+            run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
+        )
+        forged = Evidence(
+            assertion="Invented.",
+            document_url="https://never-retrieved.example/smear",
+            source_domain="never-retrieved.example",
+            credibility=InformationCredibility.CONFIRMED,
+        )
+        investigation.evidence[forged.identifier] = forged
 
-        assert Episode.ARTICLE in rendered
+        with pytest.raises(UngroundedEvidenceError, match="refusing to render"):
+            Dossier(investigation).as_json()
+
+    def test_a_grounded_investigation_still_renders_both_ways(self) -> None:
+        dossier = Dossier(Episode.with_stale_evidence(MemoryMode.SHORT))
+
+        assert Episode.ARTICLE in dossier.as_markdown()
+        assert Episode.ARTICLE in dossier.as_json()
 
 
 class TestReflectionsHypothesesAreGatedToo:
@@ -312,6 +331,49 @@ class TestReflectionsHypothesesAreGatedToo:
 
         assert "Stated at the outset." in rendered
         assert "Derived from what round one found." not in rendered
+
+
+class TestAnUntestedHypothesisCannotWinByDefault:
+    """Re-audit finding, introduced by my own fix: gating hypotheses under NONE meant a
+    Reflection-added one could never be judged, so it kept a disconfirming score of zero — and
+    under a naive least-disconfirmed ranking that beats every hypothesis actually examined. A guess
+    nobody checked would have led the report."""
+
+    def _with_one_tested_and_one_not(self) -> Investigation:
+        investigation = Episode.with_stale_evidence(MemoryMode.SHORT)
+        identifier = next(iter(investigation.evidence))
+        investigation.hypotheses.append(
+            Hypothesis(
+                statement="Examined, and contradicted once.",
+                consistency={identifier: Consistency.INCONSISTENT},
+            )
+        )
+        investigation.hypotheses.append(
+            Hypothesis(statement="Never examined at all.", origin="reflection")
+        )
+        return investigation
+
+    def test_the_untested_hypothesis_ranks_last_despite_scoring_zero(self) -> None:
+        ranked = self._with_one_tested_and_one_not().ranked_hypotheses()
+
+        assert ranked[-1].statement == "Never examined at all."
+
+    def test_it_is_never_reported_as_the_leading_explanation(self) -> None:
+        investigation = self._with_one_tested_and_one_not()
+
+        assert investigation.leading_hypothesis() == "Examined, and contradicted once."
+
+    def test_nothing_leads_while_nothing_has_been_tested(self) -> None:
+        investigation = Episode.with_stale_evidence(MemoryMode.SHORT)
+        investigation.hypotheses.append(Hypothesis(statement="Untested."))
+
+        assert investigation.leading_hypothesis() == ""
+
+    def test_an_untested_hypothesis_is_still_shown_and_marked(self) -> None:
+        rendered = Dossier(self._with_one_tested_and_one_not()).as_markdown()
+
+        assert "Never examined at all." in rendered
+        assert "NOT TESTED" in rendered
 
 
 class TestEvidenceIsPaidForOnce:

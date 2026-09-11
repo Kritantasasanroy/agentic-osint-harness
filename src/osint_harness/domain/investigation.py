@@ -290,9 +290,31 @@ class Investigation(BaseModel):
         }
 
     def ranked_hypotheses(self) -> tuple[Hypothesis, ...]:
-        """Hypotheses ordered by ACH: least disconfirmed first."""
+        """Hypotheses ordered by ACH: least disconfirmed first, but tested ones always ahead.
+
+        A hypothesis nothing has been judged against scores zero disconfirming weight, which under
+        a naive "least disconfirmed wins" ranking beats every hypothesis that was actually examined
+        and picked up even one contradicting fact. That would let a guess nobody checked lead the
+        report purely by never having been tested — the opposite of what ACH is for.
+
+        Untested hypotheses are therefore ranked last and shown last, rather than dropped: an
+        explanation nobody got round to examining is a gap worth seeing in the report, just never
+        the conclusion.
+        """
         weights = self.evidence_weights()
-        return tuple(sorted(self.hypotheses, key=lambda h: h.inconsistency_score(weights)))
+        return tuple(
+            sorted(
+                self.hypotheses,
+                key=lambda h: (not h.diagnostic_evidence(), h.inconsistency_score(weights)),
+            )
+        )
+
+    def leading_hypothesis(self) -> str:
+        """The best-supported explanation, or nothing if none has been tested yet."""
+        ranked = self.ranked_hypotheses()
+        if not ranked or not ranked[0].diagnostic_evidence():
+            return ""
+        return ranked[0].statement
 
     def total_evidence_weight(self) -> float:
         """Combined strength of everything gathered, used to decide evidential sufficiency."""

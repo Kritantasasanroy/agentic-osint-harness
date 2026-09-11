@@ -12,16 +12,20 @@ class Dossier:
     def __init__(self, investigation: Investigation) -> None:
         self._investigation = investigation
 
-    def as_markdown(self) -> str:
-        """The report, written for a human analyst.
+    def _refuse_unbacked_citations(self) -> None:
+        """Guard every way out of this class, not just the one an audit happened to probe.
 
-        This check is NOT redundant with the ones above it, and was removed once on that reasoning
+        This check is NOT redundant with the ones upstream, and was removed once on that reasoning
         and put back after an audit demonstrated the gap. `Investigation`'s validator runs at
-        construction and deserialisation; it does not run when `investigation.evidence` is mutated
+        construction and deserialisation; it does not fire when `investigation.evidence` is mutated
         in place, because pydantic does not revalidate on assignment into a held dict. Dissemination
         guards the episode's own path, not a caller that builds an investigation and renders it
-        directly. This is the output boundary — the last point before a citation reaches a reader —
-        so it is the one place the check must not be optimised away.
+        directly.
+
+        It lives in one method both outputs call because the first fix guarded only `as_markdown`,
+        leaving `as_json` — which produces the record the harness calls its recomputability source
+        of truth — safe purely by the order of two statements in one caller. Safety by statement
+        order is not safety.
         """
         unbacked = self._investigation.ungrounded_citations()
         if unbacked:
@@ -29,6 +33,10 @@ class Dossier:
                 f"refusing to render: {len(unbacked)} citations have no retrieved document behind "
                 f"them ({', '.join(unbacked[:3])})"
             )
+
+    def as_markdown(self) -> str:
+        """The report, written for a human analyst."""
+        self._refuse_unbacked_citations()
         sections = [
             self._heading(),
             self._verdict(),
@@ -44,6 +52,7 @@ class Dossier:
 
     def as_json(self) -> str:
         """The full investigation record, from which every number in the report is recomputable."""
+        self._refuse_unbacked_citations()
         return self._investigation.model_dump_json(indent=2)
 
     def _heading(self) -> str:
@@ -97,7 +106,8 @@ class Dossier:
         rows = "\n".join(
             f"| {position + 1} | {hypothesis.statement} | "
             f"{hypothesis.inconsistency_score(weights):.2f} | "
-            f"{hypothesis.support_score(weights):.2f} |"
+            f"{hypothesis.support_score(weights):.2f} | "
+            f"{'yes' if hypothesis.diagnostic_evidence() else 'NOT TESTED'} |"
             for position, hypothesis in enumerate(investigation.ranked_hypotheses())
         )
         return "\n".join(
@@ -106,10 +116,12 @@ class Dossier:
                 "",
                 "Ranked by Analysis of Competing Hypotheses: the least disconfirmed comes first, "
                 "because evidence that rules an explanation out is worth more than evidence "
-                "consistent with several.",
+                "consistent with several. An explanation nothing was judged against is shown "
+                "last and marked, because scoring zero by never having been examined is not the "
+                "same as surviving examination.",
                 "",
-                "| Rank | Hypothesis | Disconfirming weight | Supporting weight |",
-                "| --- | --- | --- | --- |",
+                "| Rank | Hypothesis | Disconfirming weight | Supporting weight | Tested |",
+                "| --- | --- | --- | --- | --- |",
                 rows,
             ]
         )

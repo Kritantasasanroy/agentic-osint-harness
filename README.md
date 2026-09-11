@@ -21,7 +21,7 @@ pip install -e ".[dev]"
 osint-harness cases                                  # the 14 benchmark subjects and claims
 osint-harness investigate ada-lovelace-person        # one investigation, replayed offline
 osint-harness ablate                                 # all 14 cases x 3 memory modes, with a report
-pytest && mypy && ruff check .                       # 211 tests, strict types, clean lint
+pytest && mypy && ruff check .                       # 216 tests, strict types, clean lint
 ```
 
 Reports land in `runs/<case>-<memory>/findings.md` and the ablation in `runs/results/ablation.md`.
@@ -188,7 +188,7 @@ All four judgments and all seven traps are exercised, and a test fails if that s
 
 ## Honest status: what is and is not verified
 
-**Verified, by commands you can re-run:** 211 tests pass, `mypy --strict` is clean across 40 source
+**Verified, by commands you can re-run:** 216 tests pass, `mypy --strict` is clean across 40 source
 files, `ruff check` is clean, and a full 42-episode ablation (14 cases x 3 memory modes) runs end to
 end offline and writes its report. Running `ablate` twice produces byte-identical output, which is
 what makes the numbers below quotable at all.

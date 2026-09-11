@@ -322,8 +322,7 @@ class Reconciliation(Phase):
             )
             applied += 1
 
-        ranked = investigation.ranked_hypotheses()
-        leading = ranked[0].statement if ranked else ""
+        leading = investigation.leading_hypothesis()
         judgment, probability = self._defensible(investigation, result)
         investigation.assess(
             Assessment(
