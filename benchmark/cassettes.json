@@ -1,0 +1,375 @@
+{
+  "calls": {
+    "1309a5716f6628e6": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:14.445263Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Markus Braun (born 1969) is an Austrian tech investor, the former CEO and CTO at the now insolvent payment processor, Wirecard AG from January 2002 until his resignation and arrest in June 2020. Braun stepped down from Wirecard amidst fraud allegations, but has denied any wrongdoing. Braun was in pre-trial detention at the Augsburg-Gablingen prison and was transferred to Stadelheim prison in Munich on November 10, 2022. On December 8, 2022, the criminal proceedings against him and two other former Wirecard managers began at the Munich regional court. Court cases were pending as of 2024.",
+          "title": "Markus Braun",
+          "url": "https://en.wikipedia.org/wiki/Markus_Braun"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:14.445263Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Wirecard AG is an insolvent German payment processor and financial services provider whose former CEO, COO, two board members, and other executives have been arrested or otherwise implicated in criminal proceedings. The company offered electronic payment transaction services and risk management, and issued and processed physical and virtual cards. As of 2017, the company was listed on the Frankfurt Stock Exchange, and was a part of the DAX stock index from September 2018 to August 2020.\nThe company is at the center of an international financial scandal. Allegations of accounting malpractices had trailed the company since the early days of its incorporation, reaching a peak in 2019 after the Financial Times published a series of investigations along with whistleblower complaints and internal documents. On 25 June 2020, Wirecard filed for insolvency following revelations that an amount of \u20ac1.9 billion was \"missing\". Long-time CEO Markus Braun subsequently resigned and was later arrested. Former COO Jan Marsalek disappeared, after being fired from his position and board seat, and remains a fugitive wanted by the German police. He has been on Europe's Most Wanted list since 2020.\nIn June 2020, the company announced that \u20ac1.9 billion in cash was missing. It owed \u20ac3.2 billion in debt. In November 2020, the company was dismantled after it sold the assets of its main business unit to Santander Group for \u20ac100 million. Other assets, including its North American, UK and Brazilian units had been previously sold at nondisclosed prices. On 25 August 2020, the court-appointed insolvency administrator issued a statement that \"under the preliminary insolvency administration, it has since been possible to stabilize the ongoing business and create a basis for its continuation.\" The statement mentioned how \"far-reaching cuts are therefore necessary in order to make any kind of continuation possible\" and announced the impending layoff of around 730 employees, in addition to all members of the management board.\nIn March 2022, Munich public prosecutors charged former CEO, Markus Braun, with fraud, breach of trust and accounting manipulation.  If found guilty on all these charges, he could face up to 15 years in prison. Braun was held in the Stadelheim prison as a pre-trial custody until the trial began.\n\n",
+          "title": "Wirecard",
+          "url": "https://en.wikipedia.org/wiki/Wirecard"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:14.445263Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Wirecard scandal (German: Wirecard-Skandal) was a series of corrupt business practices and fraudulent financial reporting that led to the insolvency of Wirecard, a payment processor and financial services provider, headquartered in Munich, Germany together with the failure of watchdogs over a number of years. The company was part of the DAX index. They offered customers electronic payment transaction and risk management services, as well as the issuance and processing of physical cards. The subsidiary, Wirecard Bank AG, held a banking licence and had contracts with multiple international financial services companies.\nAllegations of accounting malpractices have trailed the company since the early days of its incorporation, reaching a peak in 2019 after the Financial Times published a series of investigations along with whistleblower complaints and internal documents. On 25 June 2020, Wirecard filed for insolvency after revealing that \u20ac1.9 billion was \"missing\", and the termination and arrest of its CEO Markus Braun. Questions have been raised about regulatory failure on the part of Federal Financial Supervisory Authority (BaFin), Germany's top financial watchdog, and possible malpractice of Wirecard's long time auditor Ernst & Young.",
+          "title": "Wirecard scandal",
+          "url": "https://en.wikipedia.org/wiki/Wirecard_scandal"
+        }
+      ],
+      "query": "Wirecard AG (payment processor)",
+      "tool": "encyclopedia"
+    },
+    "2a9a4999edf8431c": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:11.685373Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Artificial Intelligence Act (AI Act) is a European Union regulation concerning artificial intelligence (AI). It establishes a common regulatory and legal framework for AI within the European Union (EU). The regulation entered into force on 1 August 2024, with provisions that shall come into operation gradually over the following 6 to 36 months.\nIt covers most AI systems across a wide range of sectors, with exemptions for AI used only for military, national security, research purposes, or for non-professional use. As a form of product regulation, it does not create individual rights; instead, it places duties on AI providers and on organisations that use AI in a professional context.\nThe Act classifies non-exempt AI applications by their risk of causing harm. There are four levels \u2013 unacceptable, high, limited, minimal \u2013 plus an additional category for general-purpose AI. \n\nApplications with unacceptable risks are banned.\nHigh-risk applications must comply with security, transparency and quality obligations, and undergo conformity assessments.\nLimited-risk applications only have transparency obligations.\nMinimal-risk applications are not regulated.\nFor general-purpose AI, transparency requirements are imposed, with reduced requirements for open source models, and additional evaluations for high-capability models.\nThe Act also creates a European Artificial Intelligence Board to promote national cooperation and ensure compliance with the regulation. Like the EU's General Data Protection Regulation, the Act can apply extraterritorially to providers from outside the EU if they have users within the EU.\nProposed by the European Commission on 21 April 2021, it passed the European Parliament on 13 March 2024, and was unanimously approved by the EU Council on 21 May 2024. The draft Act was revised to address the rise in popularity of generative AI systems, such as ChatGPT, whose general-purpose capabilities did not fit the main framework.",
+          "title": "Artificial Intelligence Act",
+          "url": "https://en.wikipedia.org/wiki/Artificial_Intelligence_Act"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:11.685373Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "In January 2015, Stephen Hawking, Elon Musk, and dozens of artificial intelligence experts signed an open letter on artificial intelligence calling for research on the societal impacts of AI. The letter affirmed that society can reap great potential benefits from artificial intelligence, but called for concrete research on how to prevent certain potential \"pitfalls\": artificial intelligence has the potential to eradicate disease and poverty, but researchers must not create something which is unsafe or uncontrollable. The four-paragraph letter, titled \"Research Priorities for Robust and Beneficial Artificial Intelligence: An Open Letter\", lays out detailed research priorities in an accompanying twelve-page document.",
+          "title": "Open letter on artificial intelligence",
+          "url": "https://en.wikipedia.org/wiki/Open_letter_on_artificial_intelligence"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:11.685373Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Regulation of artificial intelligence is the development of public sector policies and laws for promoting and regulating artificial intelligence (AI). The regulatory and policy landscape for AI is an emerging issue in jurisdictions worldwide, including for international organizations without direct enforcement power like the IEEE or the OECD.\nSince 2016, numerous AI ethics guidelines have been published in order to maintain social control over the technology. Furthermore, organizations deploying AI have a central role to play in creating and implementing trustworthy AI, adhering to established principles, and taking accountability for mitigating risks. The European Union adopted in 2024 a common legal framework for AI with the AI Act.\nAI governance is a term used in policy, industry, and academic contexts to describe how AI systems are directed and overseen. A 2025 systematic literature review defined it as encompassing the questions of who is accountable for AI systems, what elements are governed, when governance occurs within the development lifecycle, and how it is implemented through frameworks, tools, or models. Charlotte Stix noted that related terms, including \"trustworthy AI\", \"responsible AI\", and \"ethical AI\", have shifted in meaning over time and are often used interchangeably.",
+          "title": "Regulation of artificial intelligence",
+          "url": "https://en.wikipedia.org/wiki/Regulation_of_artificial_intelligence"
+        }
+      ],
+      "query": "OpenAI (artificial intelligence research organisation)",
+      "tool": "encyclopedia"
+    },
+    "2c869eede075d722": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:18:33.773091Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Augusta Ada King, Countess of Lovelace (n\u00e9e Byron; 10 December 1815 \u2013 27 November 1852), also known as Ada Lovelace, was an English mathematician and writer chiefly known for work on Charles Babbage's proposed mechanical general-purpose computer, the analytical engine. She was the first to recognise the machine had applications beyond pure calculation. Lovelace is often considered the first computer programmer.\nLovelace was the only legitimate child of poet Lord Byron and reformer Anne Isabella Milbanke. Lord Byron separated from his wife a month after Ada was born, and died when she was eight. Although often ill in childhood, Lovelace pursued her studies assiduously. She married William King in 1835. King was a Baron, and was created Viscount Ockham and 1st Earl of Lovelace in 1838. The name Lovelace was chosen because Ada was descended from the extinct Baron Lovelaces. The title given to her husband thus made Ada the Countess of Lovelace.\nLovelace's educational and social exploits brought her into contact with scientists such as Andrew Crosse, Charles Babbage, David Brewster, Charles Wheatstone and Michael Faraday, and the author Charles Dickens, contacts which she used to further her education. Lovelace described her approach as \"poetical science\" and herself as an \"Analyst (& Metaphysician)\".\nAt age 18, Lovelace's mathematical talents led her to a long working relationship and friendship with fellow British mathematician Charles Babbage. She was particularly interested in Babbage's work on the analytical engine. Lovelace first met him on 5 June 1833, when she and her mother attended one of Charles Babbage's Saturday night soir\u00e9es with their mutual friend, and Lovelace's private tutor, Mary Somerville. Though Babbage's analytical engine was never constructed and did not influence the invention of electronic computers, it has been recognised as a Turing-complete general-purpose computer, which anticipated the essential features of a modern electronic computer. Babbage is therefore known as the \"father of computers,\" and Lovelace is credited with several computing \"firsts\" for her collaboration with him. Lovelace translated an article by the military engineer Luigi Menabrea about the analytical engine, supplementing it with seven long explanatory notes. These described a method of using the machine to calculate Bernoulli numbers which is often called the first published computer program.\nShe developed a vision of the capability of computers to go beyond mere calculating or number-crunching, while many others, including Babbage, focused only on those capabilities. Lovelace was the first to point out the possibility of encoding information besides mere arithmetical figures, such as music, and manipulating it with such a machine. Her mindset of \"poetical science\" led her to ask questions about the analytical engine, examining how individuals and society relate to technology as a collaborative tool. Ada is widely commemorated, including in the names of a programming language, roads, buildings and institutes, as well as programmes, lectures and courses. There are plaques, statues, paintings, literary and non-fiction works about her.",
+          "title": "Ada Lovelace",
+          "url": "https://en.wikipedia.org/wiki/Ada_Lovelace"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:18:33.773091Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Ada Lovelace, also referred to simply as Lovelace, is a graphics processing unit (GPU) microarchitecture developed by Nvidia as the successor to the Ampere architecture, officially announced on September 20, 2022. It is named after the 19th century English mathematician Ada Lovelace, one of the first computer programmers. Nvidia announced the architecture along with the GeForce RTX 40 series consumer GPUs and the RTX 6000 Ada Generation workstation graphics card. The Lovelace architecture is fabricated on TSMC's custom 4N process which offers increased efficiency over the previous Samsung 8 nm and TSMC N7 processes used by Nvidia for its previous-generation Ampere architecture.",
+          "title": "Ada Lovelace (microarchitecture)",
+          "url": "https://en.wikipedia.org/wiki/Ada_Lovelace_%28microarchitecture%29"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:18:33.773091Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Portrait of Ada Lovelace is an oil on canvas portrait painting by the British artist Margaret Sarah Carpenter, from 1836. It depicts the mathematician Ada Lovelace.\nLovelace was the only daughter of the poet Lord Byron and his estranged wife, Lady Byron, and was raised by her mother. A contemporary of Charles Babbage she was one of the pioneers of computer science. Carpenter emerged as a prominent female artist of the Regency era, producing fashionable society portraits that drew comparisons to Thomas Lawrence.\nLovelace is depicted in full-length white dress with a red cape over her shoulders. It was painted the year she gave birth to her first child, having married her husband William King-Noel, 1st Earl of Lovelace the previous year. The painting was exhibited at the Royal Academy's Summer Exhibition of 1836. It is today part of the Government Art Collection and in 2023 was loaned to the National Portrait Gallery in London where it is on display.",
+          "title": "Portrait of Ada Lovelace",
+          "url": "https://en.wikipedia.org/wiki/Portrait_of_Ada_Lovelace"
+        }
+      ],
+      "query": "Ada Lovelace (19th century mathematician)",
+      "tool": "encyclopedia"
+    },
+    "5a714a863fcbe941": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:15.887057Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Apollo 17 (December 7\u201319, 1972) was the eleventh and final crewed mission of NASA's Apollo program, the sixth and most recent time humans have set foot on the Moon. Commander Gene Cernan and Lunar Module Pilot Harrison Schmitt walked on the Moon, while Command Module Pilot Ronald Evans orbited above. Schmitt was the only professional geologist to land on the Moon; he was selected in place of Joe Engle, as NASA had been under pressure to send a scientist to the Moon. The mission's heavy emphasis on science meant the inclusion of a number of new experiments, including a biological experiment containing five mice that stayed in orbit with Evans.\nMission planners had two primary goals in deciding on the landing site: to sample lunar highland material older than that at Mare Imbrium and to investigate the possibility of relatively recent volcanic activity. They therefore selected Taurus\u2013Littrow, where formations that had been viewed and pictured from lunar orbit were thought to be volcanic in nature. Since all three crew members had backed up previous Apollo lunar missions, they were familiar with the Apollo spacecraft and had more time for geology training.\nLaunched at 12:33 a.m. Eastern Standard Time (EST) on December 7, 1972, following the only launchpad delay in the Apollo program, which was caused by a hardware problem, Apollo 17 was a \"J-type\" mission that included three days on the lunar surface, expanded scientific capability, and the use of the third Lunar Roving Vehicle (LRV). Cernan and Schmitt landed in the Taurus\u2013Littrow valley, completed three moonwalks, took lunar samples and deployed scientific instruments. Orange soil was discovered at Shorty crater; it proved to be volcanic in origin, although from early in the Moon's history. Evans remained in lunar orbit in the command and service module, taking scientific measurements and photographs. The spacecraft returned to Earth on December 19. It was the last human flight beyond low Earth orbit until the Artemis II lunar flyby in April 2026.\nThe mission broke several records for crewed spaceflight, including the longest crewed lunar landing mission (12 days, 14 hours), greatest distance from a spacecraft during an extravehicular activity of any type (7.6 kilometers or 4.7 miles), longest time on the lunar surface (75 hours), longest total duration of lunar-surface extravehicular activities (22 hours, 4 minutes), largest lunar-sample return (approximately 115 kg or 254 lb), longest time in lunar orbit (6 days, 4 hours), and greatest number of lunar orbits (75).",
+          "title": "Apollo 17",
+          "url": "https://en.wikipedia.org/wiki/Apollo_17"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:15.887057Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Scaled Composites Model 339 SpaceShipTwo (SS2) is a retired air-launched suborbital spaceplane type designed for space tourism. It was manufactured by The Spaceship Company, a California-based company owned by Virgin Galactic.\nSpaceShipTwo was carried to its launch altitude by a Scaled Composites White Knight Two, before being released to fly on into the upper atmosphere powered by its rocket engine. It then glided back to Earth and performed a conventional runway landing. The spaceship was officially unveiled to the public on 7 December 2009 at the Mojave Air and Space Port in California. On 29 April 2013, after nearly three years of unpowered testing, the first SS2 constructed successfully performed its first powered test flight.\nVirgin Galactic planned to operate a fleet of five SpaceShipTwo spaceplanes in a private passenger-carrying service and took bookings for some time, with a suborbital flight carrying a ticket price of US$250,000 in 2015. The spaceplane was also used to carry scientific payloads for NASA and other organizations.\nOn 31 October 2014, during a test flight, the first SpaceShipTwo VSS Enterprise broke up in flight and crashed in the Mojave Desert. An investigation found that the craft's descent device deployed too early. Co-pilot Michael Alsbury was killed, pilot Peter Siebold was seriously injured after parachuting; he is the only person to survive a spacecraft disintegration.\nThe second SpaceShipTwo spacecraft, VSS Unity, was unveiled on 19 February 2016. The vehicle underwent flight testing 2016\u20132023. Its first flight to space (above 50 miles altitude), VSS Unity VP03, took place on 13 December 2018. The first operational flight of Unity (defined as the first flight flying passengers that were not Virgin Galactic employees) was Galactic 01 on 29 June 2023. The final flight of Unity was Galactic 07 on 8 June 2024.",
+          "title": "SpaceShipTwo",
+          "url": "https://en.wikipedia.org/wiki/SpaceShipTwo"
+        }
+      ],
+      "query": "Vantage Nebula Holdings (private holding company)",
+      "tool": "encyclopedia"
+    },
+    "5ad88cf68408655e": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:17.330299Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "John Wendell Thompson (born April 24, 1949) is an American technology executive who was the chairman of Microsoft from 2014 until June 2021, and chairman of Illumina from 2021 until 2023. He is a former chief executive of Virtual Instruments, a vice-president at IBM and the former chief executive of Symantec. Thompson later became an independent director on the board of Microsoft, and in February 2014, was named chairman. He led the search for Microsoft's next CEO; as a result, Satya Nadella was selected.",
+          "title": "John W. Thompson",
+          "url": "https://en.wikipedia.org/wiki/John_W._Thompson"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:17.330299Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Sarah Bond (born October 27, 1978) is an American business executive and former president of Xbox at Microsoft, where she oversaw the brand's operations as a platform and ecosystem, including hardware and devices, player and creator experiences, platform engineering, strategy, business planning, data and analytics, and business development and partnerships.",
+          "title": "Sarah Bond (executive)",
+          "url": "https://en.wikipedia.org/wiki/Sarah_Bond_%28executive%29"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:17.330299Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Satya Narayana Nadella (born 19 August 1967) is an Indian-American business executive. He is the chairman and chief executive officer (CEO) of Microsoft, succeeding Steve Ballmer in 2014 as CEO and John W. Thompson in 2021 as chairman. Before becoming CEO, he was the executive vice president of Microsoft's cloud and enterprise group, responsible for building and running the company's computing platforms.\n\n",
+          "title": "Satya Nadella",
+          "url": "https://en.wikipedia.org/wiki/Satya_Nadella"
+        }
+      ],
+      "query": "Satya Nadella (technology executive)",
+      "tool": "encyclopedia"
+    },
+    "63eb33f782c5bc15": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:25.197038Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Albert Einstein (14 March 1879 \u2013 18 April 1955) was a German-born theoretical physicist best known for developing the theory of relativity. Einstein also made important contributions to quantum theory. His mass\u2013energy equivalence formula E = mc2, which arises from special relativity, has been called \"the world's most famous equation\". He received the 1921 Nobel Prize in Physics for \"his services to theoretical physics, and especially for his discovery of the law of the photoelectric effect\".\nBorn as a subject to the Kingdom of W\u00fcrttemberg, part of the German Empire, Einstein moved to Switzerland in 1895, forsaking his citizenship the following year. In 1896, at the age of seventeen, he enrolled in the mathematics and physics teaching diploma program at the Swiss federal polytechnic school in Zurich, graduating in 1900. He acquired Swiss citizenship a year later, which he kept for the rest of his life, and afterwards secured a permanent position at the Swiss Patent Office in Bern. In 1905, he submitted a successful PhD dissertation to the University of Zurich. In 1914, he moved to Berlin to join the Prussian Academy of Sciences and the Humboldt University of Berlin, becoming director of the Kaiser Wilhelm Institute for Physics in 1917; he also became a Prussian and consequently also German citizen again. In 1933, while Einstein was visiting the United States, Adolf Hitler came to power in Germany. Horrified by the Nazi persecution of his fellow Jews, he decided to remain in the US, and was granted American citizenship in 1940. On the eve of World War II, he endorsed a letter to President Franklin D. Roosevelt alerting him to the potential German nuclear weapons program and recommending that the US begin similar research, later carried out as the Manhattan Project.\nIn 1905, sometimes described as his annus mirabilis (miracle year), he published four groundbreaking papers. In them, he outlined a theory of the photoelectric effect, explained Brownian motion, introduced his special theory of relativity, and demonstrated that if the special theory is correct, mass and energy are equivalent to each other. In 1915, he proposed a general theory of relativity that extended his system of mechanics to incorporate gravitation. A paper that he published the following year laid out the implications of general relativity for the modeling of the structure and evolution of the universe as a whole. It introduced the cosmological constant and is further regarded as the first step in the field of modern theoretical cosmology. In 1917, Einstein wrote a paper which introduced the concepts of spontaneous emission and stimulated emission, the latter of which is the core mechanism behind the laser and maser, and which contained a trove of information that would be beneficial to developments in physics later on, such as quantum electrodynamics and quantum optics.\nIn the middle part of his career, Einstein made important contributions to statistical mechanics and quantum theory. Especially notable was his work on the quantum physics of radiation, in which light consists of particles, subsequently called photons. With physicist Satyendra Nath Bose, he laid the groundwork for Bose\u2013Einstein statistics. For much of the last phase of his academic life, Einstein worked on two endeavors that ultimately proved unsuccessful. First, he advocated against quantum theory's introduction of fundamental randomness into science's picture of the world, objecting that \"God does not play dice\". Second, he attempted to devise a unified field theory by generalizing his geometric theory of gravitation to include electromagnetism. As a result, he became increasingly isolated from mainstream modern physics. Many things are named after him, including the element Einsteinium. In 1999, he was named Time's Person of the Century.",
+          "title": "Albert Einstein",
+          "url": "https://en.wikipedia.org/wiki/Albert_Einstein"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:25.197038Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Criticism of the theory of relativity of Albert Einstein was mainly expressed in the early years after its publication in the early twentieth century, on scientific, pseudoscientific, philosophical, or ideological bases. Though some of these criticisms had the support of reputable scientists, Einstein's theory of relativity is now accepted by the scientific community.\nReasons for criticism of the theory of relativity have included alternative theories, rejection of the abstract-mathematical method, and alleged errors of the theory. Antisemitic objections to Einstein's Jewish heritage also occasionally played a role in these objections. There are still some critics of relativity today, but their opinions are not shared by the majority in the scientific community.",
+          "title": "Criticism of the theory of relativity",
+          "url": "https://en.wikipedia.org/wiki/Criticism_of_the_theory_of_relativity"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:25.197038Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "General relativity, also known as the general theory of relativity, and as Einstein's theory of gravity, is the geometric theory of gravitation published by Albert Einstein in May 1916 and is the accepted description of the gravitation of macroscopic objects in modern physics. General relativity generalizes special relativity and refines Isaac Newton's law of universal gravitation, providing a unified description of gravity as a geometric property of space and time, or four-dimensional spacetime. In particular, the curvature of spacetime is directly related to the energy, momentum, and stress of whatever is present, including matter and radiation. The relation is specified by the Einstein field equations, a system of second-order partial differential equations. John Archibald Wheeler summarized it: \"Space-time tells matter how to move; matter tells space-time how to curve.\"\nNewton's law of universal gravitation, which describes gravity in classical mechanics, can be seen as a prediction of general relativity for the almost flat spacetime geometry around stationary mass distributions. Some predictions of general relativity, however, are beyond Newton's law of universal gravitation in classical physics. These predictions concern the passage of time, the geometry of space, the motion of bodies in free fall, and the propagation of light, and include gravitational time dilation, gravitational lensing, the gravitational redshift of light, the Shapiro time delay, singularities and black holes. So far, all tests of general relativity have been in agreement with the theory. The time-dependent solutions of general relativity enable us to extrapolate the history of the universe into the past and future, and have provided the modern framework for cosmology, thus leading to the discovery of the Big Bang and cosmic microwave background radiation. Despite the introduction of a number of alternative theories, general relativity continues to be the simplest theory consistent with experimental data.\nReconciliation of general relativity with the laws of quantum physics remains a problem, however, as no self-consistent theory of quantum gravity has been found. It is not yet known how gravity can be unified with the three non-gravitational interactions: strong, weak and electromagnetic.\nEinstein's theory has astrophysical implications, including the prediction of black holes\u2014regions of space in which space and time are distorted in such a way that nothing, not even light, can escape from them. Black holes are the end-state for massive stars. Microquasars and active galactic nuclei are believed to be stellar black holes and supermassive black holes. It also predicts gravitational lensing, where the bending of light results in distorted and multiple images of the same distant astronomical phenomenon. Other predictions include the existence of gravitational waves, which have been observed directly by the physics collaboration LIGO and other observatories. In addition, general relativity has provided the basis for cosmological models of an expanding universe.\nWidely acknowledged as a theory of extraordinary mathematical beauty, general relativity has often been described as the \"most beautiful of all existing physical theories.\"",
+          "title": "General relativity",
+          "url": "https://en.wikipedia.org/wiki/General_relativity"
+        }
+      ],
+      "query": "einstein-nobel-relativity",
+      "tool": "encyclopedia"
+    },
+    "793214c50aae737e": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:19.044478Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "John Smith is a common personal name. It is also commonly used as a placeholder name and pseudonym, and is sometimes used in the United States and the United Kingdom as a term for an average person. \nNotable people with the name include:\n\n",
+          "title": "John Smith",
+          "url": "https://en.wikipedia.org/wiki/John_Smith"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:19.044478Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Chief John Smith was a Chippewa (Ojibwe) Native American who lived in the area of Cass Lake, Minnesota. It is thought he was born between 1822 and 1826, and he died on February 6, 1922. Some sources place his birth as early as 1787. His extreme age was noted in the 1918 French annual periodical Almanach Vernot, for the day 6 September, where his name was reported as \"Fl\u00e8che Rapide\" or \"Rapid Arrow\". It also said the Ojibwa called him \"Ba-be-nar-quor-yarg\". In 1920, two years before his death, he appeared as the main feature in a motion picture exhibition that toured the United States, featuring aged Native Americans.",
+          "title": "John Smith (Chippewa)",
+          "url": "https://en.wikipedia.org/wiki/John_Smith_%28Chippewa%29"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:19.044478Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "John Smith (c.\u20091579 \u2013 21 June 1631) was an English soldier, explorer, admiral of New England, and author. He was knighted for his services to Sigismund B\u00e1thory, Prince of Transylvania, and his friend M\u00f3zes Sz\u00e9kely. Following his return to England from a life as a soldier of fortune and as a slave, he played an important role in the establishment of the colony at Jamestown, Virginia, the first permanent English settlement in North America, in the early 17th century. He was a leader of the Virginia Colony between September 1608 and August 1609, and he led an exploration along the rivers of Virginia and the Chesapeake Bay, during which he became the first English explorer to map the Chesapeake Bay area. Later, he explored and mapped the coast of New England.\nJamestown was established on May 14, 1607. Smith trained the first settlers to work at farming and fishing, thus saving the colony from early devastation. He publicly stated, \"He that will not work, shall not eat\", alluding to 2 Thessalonians 3:10. Harsh weather, a lack of food and water, the surrounding swampy wilderness, and attacks from Native Americans almost destroyed the colony. With Smith's leadership, however, Jamestown survived and eventually flourished. Smith was forced to return to England after being injured by an accidental explosion of gunpowder in a canoe.\nSmith's books and maps were important in encouraging and supporting English colonization of the New World. Having named the region of New England, he stated: \"Here every man may be master and owner of his owner labour and land. ...If he have nothing but his hands, he may...by industries quickly grow rich.\" Smith died in London in 1631.",
+          "title": "John Smith (explorer)",
+          "url": "https://en.wikipedia.org/wiki/John_Smith_%28explorer%29"
+        }
+      ],
+      "query": "John Smith",
+      "tool": "encyclopedia"
+    },
+    "87ab486843bdd5b5": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:26.705878Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Charles the Bald (French: Charles le Chauve; 13 June 823 \u2013 6 October 877) was king of West Francia (843\u201377), king of Italy (875\u201377) and emperor of the Carolingian Empire (875\u201377). After a series of civil wars during the reign of his father, Louis the Pious, Charles succeeded, by the Treaty of Verdun (843), in acquiring the western third of the empire. He was a grandson of Charlemagne and the youngest son of Louis the Pious by his second wife, Judith.\n\n",
+          "title": "Charles the Bald",
+          "url": "https://en.wikipedia.org/wiki/Charles_the_Bald"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:26.705878Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "In formal semantics and philosophy of language, a definite description is a denoting phrase in the form of \"the X\" where X is a noun-phrase or a singular common noun. The definite description is proper if X applies to a unique individual or object.  For example: \"the first person in space\" and \"the 42nd President of the United States of America\" are proper. The definite descriptions \"the person in space\" and \"the man from Ohio\" are improper because the noun phrase X applies to more than one thing, and the definite descriptions \"the first man on Mars\" and \"the man from Jupiter.\" are improper because X applies to nothing. Improper descriptions raise some difficult questions about the law of excluded middle, denotation, modality, and mental content.",
+          "title": "Definite description",
+          "url": "https://en.wikipedia.org/wiki/Definite_description"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:26.705878Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "France was ruled by monarchs from the establishment of the kingdom of West Francia in 843 until the end of the Second French Empire in 1870, with several interruptions.\nClassical French historiography usually regards Clovis I, king of the Franks (r.\u2009507\u2013511), as the first king of France. However, most historians today consider that such a kingdom did not begin until the establishment of West Francia, after the fragmentation of the Carolingian Empire in the 9th century.",
+          "title": "List of French monarchs",
+          "url": "https://en.wikipedia.org/wiki/List_of_French_monarchs"
+        }
+      ],
+      "query": "king-of-france-bald",
+      "tool": "encyclopedia"
+    },
+    "892332cfd7d7c8c1": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:28.177482Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Apollo 11 (July 16\u201324, 1969) was the American spaceflight that first landed humans on the Moon, and the fifth crewed mission of NASA's Apollo program. The mission was crewed by Commander Neil Armstrong, Command Module Pilot Michael Collins, and Lunar Module Pilot Edwin \"Buzz\" Aldrin, all of whom were on their second and final spaceflight.\nLaunched atop a Saturn V rocket from Kennedy Space Center in Florida on July 16 at 13:32 UTC, the Apollo spacecraft consisted of three parts: the command module (CM), which housed the three astronauts and was the only part to return to Earth; the service module (SM), which provided propulsion, electrical power, oxygen, and water to the command module; and the Lunar Module (LM), which had two stages\u2014a descent stage with a large engine and fuel tanks for landing on the Moon, and a lighter ascent stage containing a cabin for two astronauts and a small engine to return them to lunar orbit. After a three-day transit, Armstrong and Aldrin descended to the surface aboard the LM Eagle, landing in the Sea of Tranquility (Mare Tranquillitatis) on July 20 at 20:17 UTC while Collins remained in lunar orbit aboard the CM Columbia. Armstrong became the first human to walk on the Moon approximately six hours after landing, followed by Aldrin nineteen minutes later. Together they spent around two and a half hours walking on the surface, planting an American flag, speaking with President Richard Nixon who was in the White House, deploying scientific instruments, and collecting 21.5 kg (47.5 lb) of lunar material. After more than 21 hours on the surface, they rejoined Collins in lunar orbit, and the crew returned safely to Earth on July 24, splashing down in the Pacific Ocean.\nApollo 11 was the culmination of the Space Race, a geopolitical competition between the United States and the Soviet Union rooted in Cold War rivalry. It fulfilled a national goal set by President John F. Kennedy in May 1961, who had challenged the United States to land a man on the Moon and return him safely before the end of the decade. The program overcame a severe setback with the fatal Apollo 1 launchpad fire in January 1967 and drew on technologies developed through the preceding Mercury and Gemini programs. The Soviet Union, despite early leads in spaceflight, was unable to match the Saturn V rocket, and its uncrewed lunar probe Luna 15 crashed on the Moon on July 21, while Neil Armstrong and Buzz Aldrin were still on the lunar surface.\nArmstrong's moonwalk was broadcast live to an estimated 600 million viewers, roughly one-fifth of the world's population, making it among the most-watched television events in history. Stepping onto the lunar surface, Armstrong declared: \"That's one small step for [a] man, one giant leap for mankind.\" Lunar samples returned by the mission led to the identification of three previously unrecognized minerals, and scientific instruments deployed on the surface continued returning data for years afterwards. The crew were honoured with ticker-tape parades, a world goodwill tour, and the Presidential Medal of Freedom. The command module Columbia is preserved at the National Air and Space Museum in Washington, D.C., while the descent stage of Eagle remains on the lunar surface.\n\n",
+          "title": "Apollo 11",
+          "url": "https://en.wikipedia.org/wiki/Apollo_11"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:28.177482Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Apollo 11 is a 2019 American documentary film edited, produced, and directed by Todd Douglas Miller. It focuses on the 1969 Apollo 11 mission, the first spaceflight to land humans on the Moon. The film consists solely of archival footage, including 70 mm film previously unreleased to the public, and does not feature narration, interviews, or modern recreations. The Saturn V rocket, Apollo 11 crew (consisting of Buzz Aldrin, Neil Armstrong, and Michael Collins), and Apollo program Earth-based mission operations engineers are prominently featured in the film.\nThe film premiered at the Sundance Film Festival on January 24, 2019, and was released theatrically in the United States by Neon on March 1. It received acclaim from critics and grossed $15 million at the box office. At the 4th Critics' Choice Documentary Awards, the film won a leading five awards (including Best Documentary Feature), and, at the 72nd Primetime Creative Arts Emmy Awards, it won three awards (for editing and sound) out of five nominations, one of which recognized Aldrin and Collins' work capturing the Apollo 11 mission on film.",
+          "title": "Apollo 11 (2019 film)",
+          "url": "https://en.wikipedia.org/wiki/Apollo_11_%282019_film%29"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:28.177482Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Apollo 11 Cave is an archeological site in the \u01c0Ai-\u01c0Ais/Richtersveld Transfrontier Park of south-western Namibia, approximately 250 km (160 mi) southwest of Keetmanshoop. The name given to the surrounding area and presumably the cave by the Nama people was \"Goachanas\". However, the cave was given its name by German archaeologist Wolfgang Erich Wendt (1934-2015) in reference to Apollo 11's then-recent return to Earth.",
+          "title": "Apollo 11 Cave",
+          "url": "https://en.wikipedia.org/wiki/Apollo_11_Cave"
+        }
+      ],
+      "query": "apollo-11-date",
+      "tool": "encyclopedia"
+    },
+    "c71008b8de2e30c7": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:13.080453Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Elizabeth Anne Holmes (born February 3, 1984) is an American businesswoman convicted of fraud in connection with her health technology company Theranos. Holmes founded Theranos in 2003, and its valuation soared in the early 2010s after it claimed to have revolutionized blood testing by developing methods that needed only very small volumes of blood, such as from a fingerprick. In 2015, Forbes had named Holmes the youngest and wealthiest self-made female billionaire in the United States on the basis of a $9-billion valuation of her company. In the following year, as accusations of fraud about Theranos's claims began to surface, Forbes revised its estimate of Holmes's net worth to zero, and Fortune named her in its feature article on \"The World's 19 Most Disappointing Leaders\".\nThe decline of Theranos began in 2015, when a series of journalistic and regulatory investigations revealed doubts about the company's claims and whether Holmes had been truthful with investors and the government. In 2018, the U.S. Securities and Exchange Commission (SEC) charged Theranos, Holmes, and former Theranos chief operating officer (COO) Ramesh \"Sunny\" Balwani with raising $700 million from investors through a fraud involving false or exaggerated claims about the accuracy of the company's blood-testing technology; Holmes settled the charges by paying a $500,000 no admit no deny (NAND) fine, returning 18.9 million shares to the company, relinquishing her voting control of Theranos, and accepting a ten-year ban from serving as an officer or director of a public company.\nHolmes was in a clandestine romantic relationship with Balwani throughout most of Theranos's history. Holmes and Balwani jointly ran the company with a \"dysfunctional corporate culture\" of \"secrecy and fear\" according to employees. Staff also claimed that those who \"raised concerns or objections\" were \"usually marginalized or fired\" by the pair. Following the collapse of Theranos, Holmes started dating hotel heir William \"Billy\" Evans, whom she married in 2019 and with whom she has had two children (born in 2021 and 2023).\nIn June 2018, a federal grand jury indicted Holmes and Balwani on fraud charges. Her trial in the case of U.S. v. Holmes, et al. ended in January 2022 when Holmes was convicted of defrauding investors and acquitted of defrauding patients. She was sentenced to serve 11+1\u20444 years at Federal Prison Camp, Bryan, beginning on May 30, 2023. She and Balwani were ordered to pay $452 million in restitution to the victims of the fraud. The credibility of Theranos was attributed in part to Holmes's personal connections and ability to recruit the support of influential people, including Henry Kissinger, George Shultz, James Mattis, and Betsy DeVos, all of whom had served or went on to serve as U.S. presidential cabinet officials.",
+          "title": "Elizabeth Holmes",
+          "url": "https://en.wikipedia.org/wiki/Elizabeth_Holmes"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:13.080453Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Ian Gibbons (March 6, 1946 \u2013 May 23, 2013) was a British biochemist and molecular biology researcher who served as the chief scientist of the American company Theranos, which was founded by Elizabeth Holmes. For more than 30 years, Gibbons performed research in medical therapeutics and diagnostic testing prior to joining Theranos in 2005. He attempted to raise issues with Theranos' management about the inaccuracy of their testing devices.\nIn 2013, Gibbons intentionally overdosed on acetaminophen the night before he was scheduled to be deposed in a lawsuit related to Theranos. He was hospitalized for several days and died from liver failure. Theranos collapsed in 2018 after journalist John Carreyrou revealed in The Wall Street Journal that its supposedly revolutionary blood testing devices, requiring only a fingerstick of blood, had never functioned as claimed. Gibbons had attempted to inform his superiors at Theranos, including Holmes, of the failure of their technology but the company's executives repeatedly ignored his objections.\nGibbons' career at Theranos is documented in Carreyrou's book Bad Blood: Secrets and Lies in a Silicon Valley Startup, and in the second episode of the ABC News podcast The Dropout. British actor Stephen Fry portrayed Gibbons in the biographical drama miniseries The Dropout, which is based on the podcast.",
+          "title": "Ian Gibbons (biochemist)",
+          "url": "https://en.wikipedia.org/wiki/Ian_Gibbons_%28biochemist%29"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:13.080453Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Theranos Inc. () was an American privately held corporation that was touted as a breakthrough health technology company. Founded in 2003 by then 19-year-old Elizabeth Holmes, Theranos raised more than US$700 million from venture capitalists and private investors, resulting in a $9 billion valuation at its peak in 2013 and 2014. The company falsely claimed that it had devised blood tests that could be performed rapidly and accurately, while requiring very small amounts of blood, all using compact automated devices that the company had developed.\nA turning point came in 2015, when medical research professor John Ioannidis, and later, professor of clinical biochemistry Eleftherios Diamandis, along with investigative journalist John Carreyrou of The Wall Street Journal, questioned the validity of Theranos' technology. The company faced a string of legal and commercial challenges from medical authorities, investors, the U.S. Securities and Exchange Commission (SEC), the Centers for Medicare and Medicaid Services (CMS), state attorneys general, former business partners, patients, and others. By June 2016, Forbes estimated that Holmes's personal net worth had dropped from $4.5 billion to \"nothing\". After several years of struggle, lawsuits, and sanctions from CMS, what remained of the company was dissolved in September 2018.\nTheranos, Holmes and former company president Sunny Balwani were charged with fraud by the SEC in 2018. Holmes and Balwani were also charged with wire fraud and conspiracy, with Holmes being found guilty on four counts in January 2022 and sentenced that November to 11 years and 3 months in prison. Balwani was convicted on all 12 counts brought against him in July 2022, and in December 2022 was sentenced to 12 years and 11 months in prison and 3 years of probation.",
+          "title": "Theranos",
+          "url": "https://en.wikipedia.org/wiki/Theranos"
+        }
+      ],
+      "query": "Theranos (blood testing company)",
+      "tool": "encyclopedia"
+    },
+    "d7bac026a135a04e": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:10.057344Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Anthropic, PBC is an American artificial intelligence (AI) public benefit corporation headquartered in San Francisco, California. Its flagship product is Claude, a series of proprietary large language models (LLMs). Anthropic was founded in 2021 with the goal of promoting AI safety by former members of OpenAI, including siblings Daniela Amodei and Dario Amodei, who are president and CEO, respectively. The company is privately held but reportedly plans an initial public offering in 2026. Valued at US$965 billion in a May 2026 Series H funding round, Anthropic is one of the world's most valuable AI pure play companies, rivaled by OpenAI.\nAnthropic develops the LLM Claude in four tiers: Haiku, Sonnet, Opus, and Fable. Claude is accessible via an online chatbot, an API, and Anthropic's agent harnesses: Claude Code, Cowork, Design, and Science. Its model class Claude Mythos is available only to approved US organizations with a cybersecurity and life sciences focus. Anthropic's Project Panama, internally described as an \"effort to destructively scan all the books in the world\", provides training data for Claude. Before Project Panama, Anthropic downloaded pirated books and was sued, settling in 2025 a copyright infringement lawsuit from authors for $1.5 billion.\nAnthropic conducts LLM research including on mechanistic interpretability, safety, alignment, and societal impact. Notable researchers working at Anthropic include Andrej Karpathy, John Jumper, Jan Leike, Chris Olah and Amanda Askell.\nAnthropic partners with Palantir to provide Claude to US federal agencies including the Department of Defense (DoD) and the Intelligence Community; Claude was used in the 2026 Iran war and the 2026 United States intervention in Venezuela. In February 2026, the DoD demanded the ability to use Claude for all lawful purposes, but Anthropic refused to drop restrictions against mass domestic surveillance and fully autonomous weapons. The dispute led the Trump administration to phase out Anthropic products from government use, a decision blocked by a preliminary injunction from a federal judge who called it \"First Amendment retaliation\". Throughout 2026, Anthropic accused Chinese competitors including DeepSeek, Moonshot AI, Alibaba Cloud, and Z.ai of distilling Claude for their models.",
+          "title": "Anthropic",
+          "url": "https://en.wikipedia.org/wiki/Anthropic"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:10.057344Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Since January 2026, the United States Department of Defense has conflicted with the artificial intelligence company Anthropic over the use of its products for military purposes and mass domestic surveillance.\n\n",
+          "title": "Anthropic\u2013United States Department of Defense dispute",
+          "url": "https://en.wikipedia.org/wiki/Anthropic%E2%80%93United_States_Department_of_Defense_dispute"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:10.057344Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Below is a list of notable companies that primarily focus on artificial intelligence (AI). Companies that simply make use of AI but have a different primary focus are not included.\n\n",
+          "title": "List of artificial intelligence companies",
+          "url": "https://en.wikipedia.org/wiki/List_of_artificial_intelligence_companies"
+        }
+      ],
+      "query": "Anthropic (artificial intelligence research company)",
+      "tool": "encyclopedia"
+    },
+    "e584e016a907e142": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:20.691974Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Andrew Yan-Tak Ng (Chinese: \u5433\u6069\u9054; born April 18, 1976) is a British-American computer scientist and technology entrepreneur focusing on machine learning and artificial intelligence (AI). Ng was a cofounder and head of Google Brain and was the former Chief Scientist at Baidu.\nNg is an adjunct professor at Stanford University (formerly associate professor and Director of its Stanford AI Lab or SAIL). Ng has also worked in online education, cofounding Coursera and DeepLearning.AI. He has spearheaded many efforts to \"democratize deep learning\" teaching over 8 million students through his online courses. Ng is renowned globally in computer science, recognized in Time magazine's 100 Most Influential People in 2012 and Fast Company's Most Creative People in 2014. His influence extends to being named in the Time100 AI Most Influential People in 2023.\nIn 2018, he launched and currently heads the AI Fund, initially a $175-million investment fund for backing artificial intelligence startups. He has founded LandingAI, which provides AI-powered SaaS products. On April 11, 2024, Amazon announced Ng's appointment to its board of directors.",
+          "title": "Andrew Ng",
+          "url": "https://en.wikipedia.org/wiki/Andrew_Ng"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:20.691974Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Eric Poe Xing (Chinese: \u90a2\u6ce2) is an American computer scientist who has been serving as president of Mohamed bin Zayed University of Artificial Intelligence (MBZUAI) since January 2021. He is also a professor in the Carnegie Mellon University School of Computer Science where he founded the SAILING Lab in 2004, and is the co-founder of the AI companies Petuum and GenBio AI.\nXing's research focuses on statistical machine learning, probabilistic graphical models, and systems for distributed machine learning. He was elected a Fellow of the Institute of Electrical and Electronics Engineers in 2019 for \"contributions to machine learning algorithms and systems\" and a Fellow of the Association for Computing Machinery in 2022 for \"contributions to algorithms, architectures, and applications in machine learning.\"",
+          "title": "Eric Xing",
+          "url": "https://en.wikipedia.org/wiki/Eric_Xing"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:20.691974Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Michael Irwin Jordan  (born February 25, 1956) is an American scientist, professor at the University of California, Berkeley, research scientist at the Inria Paris, and researcher in machine learning, statistics, and artificial intelligence.\nJordan was elected a member of the National Academy of Engineering in 2010 for contributions to the foundations and applications of machine learning.\nHe is one of the leading figures in machine learning, and in 2016 Science reported him as the world's most influential computer scientist.\nIn 2022, Jordan won the inaugural World Laureates Association Prize in Computer Science or Mathematics, \"for fundamental contributions to the foundations of machine learning and its application.\"",
+          "title": "Michael I. Jordan",
+          "url": "https://en.wikipedia.org/wiki/Michael_I._Jordan"
+        }
+      ],
+      "query": "Michael Jordan (machine learning researcher, University of California, Berkeley)",
+      "tool": "encyclopedia"
+    },
+    "f51407b938b20673": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:22.342501Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Great Attractor is a region of enhanced gravitational attraction in the local universe. It lies in the general direction of the Norma Cluster and the Hydra\u2013Centaurus Supercluster, approximately 150\u2013250 million light-years from the Milky Way. Its presence was inferred from the peculiar motions of galaxies, which deviate from the motion expected solely from the expansion of the universe.\nThe term does not refer to a single galaxy, galaxy cluster, or compact astronomical object. Instead, it describes a broad concentration of matter and an associated minimum in the local gravitational-potential and velocity fields. Early models attributed a mass of approximately 1016 solar masses (M\u2609) to the region. Later observations indicated that the motion of nearby galaxies cannot be explained by the Great Attractor region alone and that more distant structures, particularly the Shapley Supercluster, also contribute substantially.\nThe region is difficult to observe at visible wavelengths because it lies behind the galactic plane of the Milky Way, within the Zone of Avoidance. Dust, gas, and foreground stars obscure many background galaxies in this part of the sky. Astronomers therefore study the area using X-ray, radio, infrared, and neutral-hydrogen observations, which penetrate the obscuring material more effectively than visible light.\nThe Great Attractor was incorporated into the definition of the Laniakea Supercluster in 2014. Under that definition, Laniakea is a basin of attraction whose galaxy flows converge approximately toward the Norma and Centaurus regions. More recent reconstructions using the larger Cosmicflows-4 catalogue have suggested that Laniakea may not be an independent basin and may instead form part of a substantially larger basin associated with the Shapley concentration.",
+          "title": "Great Attractor",
+          "url": "https://en.wikipedia.org/wiki/Great_Attractor"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:22.343786Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Great Wall of China is a series of fortifications in China. They were built across the historical northern borders of ancient Chinese states and Imperial China as protection against various nomadic groups from the Eurasian Steppe. The first walls date to the 7th century BC; these were joined together in the Qin dynasty. Successive dynasties expanded the wall system; the best-known sections were built by the Ming dynasty (1368\u20131644).\nTo aid in defense, the Great Wall utilized watchtowers, troop barracks, garrison stations, signaling capabilities through the means of smoke or fire, and its status as a transportation corridor. Other purposes of the Great Wall have included border controls (allowing control of immigration and emigration, and the imposition of duties on goods transported along the Silk Road), and the regulation of trade. \nThe collective fortifications constituting the Great Wall stretch from Liaodong in the east to Lop Lake in the west, and from the present-day Sino-Russian border in the north to Tao River in the south: an arc that roughly delineates the edge of the Mongolian steppe, spanning 21,196.18 km (13,170.70 mi) in total. It is a UNESCO World Heritage Site, and was voted one of the New 7 Wonders of the World in 2007. Today, the defensive system of the Great Wall is recognized as one of the most impressive architectural feats in history.",
+          "title": "Great Wall of China",
+          "url": "https://en.wikipedia.org/wiki/Great_Wall_of_China"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:22.343786Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "The Sloan Great Wall (SGW) is a cosmic structure formed by a giant wall of galaxies (a galaxy filament). Its discovery was announced from Princeton University on October 20, 2003, by J. Richard Gott III, Mario Juri\u0107, and their colleagues, based on data from the Sloan Digital Sky Survey.\n\n",
+          "title": "Sloan Great Wall",
+          "url": "https://en.wikipedia.org/wiki/Sloan_Great_Wall"
+        }
+      ],
+      "query": "great-wall-from-space",
+      "tool": "encyclopedia"
+    },
+    "f614e95bb9cc1436": {
+      "documents": [
+        {
+          "retrieved_at": "2026-09-11T12:19:23.774493Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "A hallmark of Albert Einstein's career was his use of visualized thought experiments (German: Gedankenexperiment) as a fundamental tool for understanding physical issues and for elucidating his concepts to others. Einstein's thought experiments took diverse forms. In his youth, he mentally chased beams of light. For special relativity, he employed moving trains and flashes of lightning to explain his theory. For general relativity, he considered a person falling off a roof, accelerating elevators, blind beetles crawling on curved surfaces and the like. In his debates with Niels Bohr on the nature of reality, he proposed imaginary devices that attempted to show, at least in concept, how the Heisenberg uncertainty principle might be evaded. In a contribution to the literature on quantum mechanics, Einstein considered two particles briefly interacting and then flying apart so that their states are correlated, anticipating the phenomenon known as quantum entanglement.",
+          "title": "Einstein's thought experiments",
+          "url": "https://en.wikipedia.org/wiki/Einstein%27s_thought_experiments"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:23.774493Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "An Einstein\u2013Weyl geometry is a smooth conformal manifold, together with a compatible Weyl connection that satisfies an appropriate version of the Einstein vacuum equations, first considered by Cartan (1943) and named after Albert Einstein and Hermann Weyl.  Specifically, if \n  \n    \n      \n        M\n      \n    \n    {\\displaystyle M}\n  \n is a manifold with a conformal metric \n  \n    \n      \n        [\n        g\n        ]\n      \n    \n    {\\displaystyle [g]}\n  \n, then a Weyl connection is by definition a torsion-free affine connection \n  \n    \n      \n        \u2207\n      \n    \n    {\\displaystyle \\nabla }\n  \n such that\n\n  \n    \n      \n        \u2207\n        g\n        =\n        \u03b1\n        \u2297\n        g\n      \n    \n    {\\displaystyle \\nabla g=\\alpha \\otimes g}\n  \n\nwhere \n  \n    \n      \n        \u03b1\n      \n    \n    {\\displaystyle \\alpha }\n  \n is a one-form.\nThe curvature tensor is defined in the usual manner by\n\n  \n    \n      \n        R\n        (\n        X\n        ,\n        Y\n        )\n        Z\n        =\n        (\n        \n          \u2207\n          \n            X\n          \n        \n        \n          \u2207\n          \n            Y\n          \n        \n        \u2212\n        \n          \u2207\n          \n            Y\n          \n        \n        \n          \u2207\n          \n            X\n          \n        \n        \u2212\n        \n          \u2207\n          \n            [\n            X\n            ,\n            Y\n            ]\n          \n        \n        )\n        Z\n        ,\n      \n    \n    {\\displaystyle R(X,Y)Z=(\\nabla _{X}\\nabla _{Y}-\\nabla _{Y}\\nabla _{X}-\\nabla _{[X,Y]})Z,}\n  \n\nand the Ricci curvature is\n\n  \n    \n      \n        R\n        c\n        (\n        Y\n        ,\n        Z\n        )\n        =\n        tr\n        \u2061\n        (\n        X\n        \u21a6\n        R\n        (\n        X\n        ,\n        Y\n        )\n        Z\n        )\n        .\n      \n    \n    {\\displaystyle Rc(Y,Z)=\\operatorname {tr} (X\\mapsto R(X,Y)Z).}\n  \n\nThe Ricci curvature for a Weyl connection may fail to be symmetric (its skew part is essentially the exterior derivative of \n  \n    \n      \n        \u03b1\n      \n    \n    {\\displaystyle \\alpha }\n  \n.)\nAn Einstein\u2013Weyl geometry is then one for which the symmetric part of the Ricci curvature is a multiple of the metric, by an arbitrary smooth function:\n\n  \n    \n      \n        R\n        c\n        (\n        X\n        ,\n        Y\n        )\n        +\n        R\n        c\n        (\n        Y\n        ,\n        X\n        )\n        =\n        f\n        \n        g\n        (\n        X\n        ,\n        Y\n        )\n        .\n      \n    \n    {\\displaystyle Rc(X,Y)+Rc(Y,X)=f\\,g(X,Y).}\n  \n\nThe global analysis of Einstein\u2013Weyl geometries is generally more subtle than that of conformal geometry. For example, the Einstein cylinder is a global static conformal structure, but only one period of the cylinder (with the conformal structure of the de Sitter metric) is Einstein\u2013Weyl.",
+          "title": "Einstein\u2013Weyl geometry",
+          "url": "https://en.wikipedia.org/wiki/Einstein%E2%80%93Weyl_geometry"
+        },
+        {
+          "retrieved_at": "2026-09-11T12:19:23.774493Z",
+          "source_domain": "en.wikipedia.org",
+          "text": "Albert Einstein (1879\u20131955) was a renowned theoretical physicist of the 20th century, best known for his special and general theories of relativity. He also made important contributions to statistical mechanics, especially by his treatment of Brownian motion, his resolution of the paradox of specific heats, and his connection of fluctuations and dissipation.  Despite his reservations about its interpretation, Einstein also made seminal contributions to quantum mechanics and, indirectly, quantum field theory, primarily through his theoretical studies of the photon.\nEinstein's writings, including his scientific publications, have been digitized and released on the Internet with English translations by a consortium of the Hebrew University of Jerusalem, Princeton University Press, and the California Institute of Technology, called the Einstein Papers Project.\nEinstein's scientific publications are listed below in four tables: journal articles, book chapters, books and authorized translations.   Each publication is indexed in the first column by its number in Schilpp's bibliography in the book Albert Einstein: Philosopher\u2013Scientist (pp. 694\u2013730), which Schilpp edited, and by its article number in Einstein's Collected Papers.  Complete references for these two bibliographies may be found below in the Bibliography section.  The Schilpp numbers are used for cross-referencing in the Notes (the final column of each table), since they cover a greater time period of Einstein's life at present.  The English translations of titles are generally taken from the published volumes of the Collected Papers.  For some publications, however, such official translations are not available; unofficial translations are indicated with a \u00a7 superscript. Collaborative works by Einstein are highlighted in lavender, with the co-authors provided in the final column of the table.\nThere were also five volumes of Einstein's Collected Papers (volumes 1, 5, 8\u201310) that are devoted to his correspondence, much of which is concerned with scientific questions, but were never prepared for publication.",
+          "title": "List of scientific publications by Albert Einstein",
+          "url": "https://en.wikipedia.org/wiki/List_of_scientific_publications_by_Albert_Einstein"
+        }
+      ],
+      "query": "einstein-failed-maths",
+      "tool": "encyclopedia"
+    }
+  }
+}

@@ -63,6 +63,14 @@ class Investigator:
         self._register.learn_from(investigation)
         return investigation
 
+    def archive(self) -> InvestigationArchive:
+        """The long-term memory this investigator writes to, so a caller can persist it."""
+        return self._archive
+
+    def register(self) -> SourceRegister:
+        """The publisher grades this investigator has learned, so a caller can persist them."""
+        return self._register
+
     def machine(self) -> InvestigationGraph:
         """The wired state machine. Exposed so a caller can inspect what phases exist."""
         nodes: dict[InvestigationPhase, Node] = {

@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-osint-harness = "osint_harness.__main__:main"
+osint-harness = "osint_harness.__main__:CommandLine.main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/osint_harness"]

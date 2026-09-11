@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from html.parser import HTMLParser
+from typing import ClassVar
 from urllib.parse import quote
 
 import httpx
@@ -11,6 +12,11 @@ from osint_harness.sources.cassette import Cassette, CassetteMissError, Cassette
 
 class Tool(ABC):
     """An external source the investigation can query, recorded so the run can be replayed."""
+
+    USER_AGENT: ClassVar[str] = (
+        "agentic-osint-harness/0.1 "
+        "(https://github.com/Kritantasasanroy/agentic-osint-harness) python-httpx"
+    )
 
     def __init__(self, cassette: Cassette, timeout_seconds: float = 20.0) -> None:
         self._cassette = cassette
@@ -121,7 +127,7 @@ class Encyclopedia(Tool):
                 "gsrsearch": query,
                 "gsrlimit": "3",
             },
-            headers={"User-Agent": "agentic-osint-harness/0.1 (research evaluation harness)"},
+            headers={"User-Agent": self.USER_AGENT},
             timeout=self._timeout_seconds,
             follow_redirects=True,
         )
@@ -147,7 +153,7 @@ class PageFetch(Tool):
     def retrieve(self, query: str) -> tuple[Document, ...]:
         response = httpx.get(
             query,
-            headers={"User-Agent": "agentic-osint-harness/0.1 (research evaluation harness)"},
+            headers={"User-Agent": self.USER_AGENT},
             timeout=self._timeout_seconds,
             follow_redirects=True,
         )
