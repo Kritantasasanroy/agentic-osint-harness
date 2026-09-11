@@ -369,7 +369,9 @@ class Reflection(Phase):
                 Lead(question=planned.question, priority=planned.priority, origin="reflection")
             )
         for statement in result.new_hypotheses:
-            investigation.hypotheses.append(Hypothesis(statement=statement))
+            investigation.hypotheses.append(
+                Hypothesis(statement=statement, origin="reflection")
+            )
 
         if self._running_out(investigation):
             return Transition(

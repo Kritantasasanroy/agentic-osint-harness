@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from osint_harness.bench.reward import StepReward
-from osint_harness.domain.analysis import Evidence, Judgment
+from osint_harness.domain.analysis import Evidence, Hypothesis, Judgment
 from osint_harness.domain.investigation import (
     Investigation,
     InvestigationPhase,
@@ -257,6 +257,61 @@ class TestAGradeCarriesItsReason:
 
         assert source.reliability is SourceReliability.CANNOT_BE_JUDGED
         assert source.reason == "not yet assessed"
+
+
+class TestTheRendererIsAlsoAGate:
+    """Re-audit finding: this check was removed on the reasoning that the constructor validator
+    made it redundant. It does not — pydantic does not revalidate on mutation into a held dict, so
+    a forged item assigned directly still rendered as a clean citation. Restored, and pinned here
+    so it is not optimised away a second time."""
+
+    def test_a_forged_citation_assigned_directly_is_refused_at_render(self) -> None:
+        investigation = Investigation.open(
+            run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
+        )
+        forged = Evidence(
+            assertion="Invented.",
+            document_url="https://never-retrieved.example/smear",
+            source_domain="never-retrieved.example",
+            credibility=InformationCredibility.CONFIRMED,
+        )
+        investigation.evidence[forged.identifier] = forged
+
+        with pytest.raises(UngroundedEvidenceError, match="refusing to render"):
+            Dossier(investigation).as_markdown()
+
+    def test_a_grounded_investigation_still_renders(self) -> None:
+        rendered = Dossier(Episode.with_stale_evidence(MemoryMode.SHORT)).as_markdown()
+
+        assert Episode.ARTICLE in rendered
+
+
+class TestReflectionsHypothesesAreGatedToo:
+    """Re-audit finding: hypotheses were left entirely ungated, but Reflection adds hypotheses
+    worded from evidence seen in an earlier round, so those additions carried that round's findings
+    into later prompts under NONE even though the evidence itself was hidden."""
+
+    def _with_both(self, mode: MemoryMode) -> Briefing:
+        investigation = Episode.with_stale_evidence(mode)
+        investigation.hypotheses.append(
+            Hypothesis(statement="Stated at the outset.", origin="direction")
+        )
+        investigation.hypotheses.append(
+            Hypothesis(statement="Derived from what round one found.", origin="reflection")
+        )
+        return Briefing(investigation)
+
+    def test_short_shows_both(self) -> None:
+        rendered = self._with_both(MemoryMode.SHORT).hypotheses()
+
+        assert "Stated at the outset." in rendered
+        assert "Derived from what round one found." in rendered
+
+    def test_none_shows_only_the_opening_set(self) -> None:
+        rendered = self._with_both(MemoryMode.NONE).hypotheses()
+
+        assert "Stated at the outset." in rendered
+        assert "Derived from what round one found." not in rendered
 
 
 class TestEvidenceIsPaidForOnce:

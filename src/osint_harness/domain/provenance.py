@@ -65,7 +65,6 @@ class Source(BaseModel):
     domain: str = Field(min_length=1)
     reliability: SourceReliability = SourceReliability.CANNOT_BE_JUDGED
     reason: str = "not yet assessed"
-    appearances: int = Field(default=0, ge=0)
 
     @classmethod
     def registrable_domain(cls, url: str) -> str:
@@ -77,10 +76,6 @@ class Source(BaseModel):
         """Record a new reliability grade together with the justification for it."""
         self.reliability = reliability
         self.reason = reason
-
-    def note_appearance(self) -> None:
-        """Record that this publisher supplied a document in one more investigation."""
-        self.appearances += 1
 
 
 class Document(BaseModel):

@@ -1,4 +1,4 @@
-from osint_harness.domain.analysis import Evidence
+from osint_harness.domain.analysis import Evidence, Hypothesis
 from osint_harness.domain.investigation import Investigation
 from osint_harness.domain.provenance import Document
 
@@ -69,18 +69,34 @@ class Briefing:
         lines = "\n".join(f"- [{lead.priority.value}] {lead.question}" for lead in leads)
         return "OPEN LEADS:\n" + lines
 
-    def hypotheses(self) -> str:
-        """The competing explanations, numbered so they can be referred to by position.
+    def visible_hypotheses(self) -> tuple[Hypothesis, ...]:
+        """The competing explanations this phase may see, after the memory mode is applied.
 
-        Deliberately not gated by memory mode. Hypotheses state the question under investigation
-        rather than accumulate findings, and without them there is no ACH matrix to score at all,
-        so withholding them would not model a weaker memory — it would remove the method.
+        The opening set is never withheld: it states the question under investigation rather than
+        accumulating findings, and without it there is no ACH matrix to score at all, so hiding it
+        would remove the method rather than model a weaker memory.
+
+        Hypotheses that Reflection added later are different. Those are worded from evidence seen
+        in an earlier round, so leaving them visible would let that round's findings survive into a
+        later prompt under `NONE` even though the evidence itself is correctly hidden — a narrower
+        version of the same leak the evidence gate closes.
         """
-        if not self._investigation.hypotheses:
+        investigation = self._investigation
+        if investigation.memory_mode.carries_working_state():
+            return tuple(investigation.hypotheses)
+        return tuple(
+            hypothesis
+            for hypothesis in investigation.hypotheses
+            if hypothesis.origin == "direction"
+        )
+
+    def hypotheses(self) -> str:
+        """The visible explanations, numbered so they can be referred to by position."""
+        visible = self.visible_hypotheses()
+        if not visible:
             return ""
         lines = "\n".join(
-            f"[{index}] {hypothesis.statement}"
-            for index, hypothesis in enumerate(self._investigation.hypotheses)
+            f"[{index}] {hypothesis.statement}" for index, hypothesis in enumerate(visible)
         )
         return "HYPOTHESES:\n" + lines
 

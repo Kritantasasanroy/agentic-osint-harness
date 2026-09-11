@@ -12,6 +12,7 @@ from osint_harness.domain.investigation import (
     MemoryMode,
     Recollection,
 )
+from osint_harness.storage import Persisted
 
 
 class FailureMode(StrEnum):
@@ -197,7 +198,7 @@ class CaseOutcome(BaseModel):
         return self.reward.total() / (self.tokens / 1000.0)
 
 
-class BenchmarkRun(BaseModel):
+class BenchmarkRun(Persisted):
     """One sweep of the benchmark in one memory mode.
 
     A crashed or halted episode stays in the denominator with a failure tag. Dropping it would be

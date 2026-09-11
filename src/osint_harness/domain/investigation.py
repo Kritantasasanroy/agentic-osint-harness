@@ -183,11 +183,7 @@ class Investigation(BaseModel):
         guards construction and deserialisation too, so a record cannot be assembled or reloaded
         from disk carrying a citation with nothing behind it.
         """
-        unbacked = [
-            item.document_url
-            for item in self.evidence.values()
-            if item.document_url not in self.documents
-        ]
+        unbacked = self.ungrounded_citations()
         if unbacked:
             raise ValueError(
                 f"investigation {self.run_id} holds {len(unbacked)} citations with no retrieved "
@@ -233,7 +229,6 @@ class Investigation(BaseModel):
         self.documents[document.url] = document
         if document.source_domain not in self.source_grades:
             self.source_grades[document.source_domain] = Source(domain=document.source_domain)
-        self.source_grades[document.source_domain].note_appearance()
 
     def record_evidence(self, evidence: Evidence) -> str:
         """Store an extracted assertion, refusing any that does not trace to a held document."""

@@ -272,8 +272,7 @@ class CommandLine:
         return 0
 
     def _write_run(self, run: BenchmarkRun) -> None:
-        path = self._workspace.results_directory() / f"run-{run.memory_mode.value}.json"
-        path.write_text(run.model_dump_json(indent=2), encoding="utf-8")
+        run.write_to(self._workspace.results_directory() / f"run-{run.memory_mode.value}.json")
 
     @classmethod
     def main(cls) -> int:

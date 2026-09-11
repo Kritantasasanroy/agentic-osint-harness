@@ -86,6 +86,7 @@ class Hypothesis(BaseModel):
 
     statement: str = Field(min_length=1)
     consistency: dict[str, Consistency] = Field(default_factory=dict)
+    origin: str = "direction"
 
     def judge(self, evidence_id: str, consistency: Consistency) -> None:
         """Record how one piece of evidence bears on this hypothesis."""
