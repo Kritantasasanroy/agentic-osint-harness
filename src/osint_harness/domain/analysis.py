@@ -23,10 +23,6 @@ class Judgment(StrEnum):
     PARTIALLY_SUPPORTED = "partially_supported"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
-    def is_conclusive(self) -> bool:
-        """Whether this judgment commits to an answer rather than declining to reach one."""
-        return self is not Judgment.INSUFFICIENT_EVIDENCE
-
 
 class ConfidenceBand(StrEnum):
     """An ICD 203 word of estimative probability, carrying its own numeric range."""

@@ -1,5 +1,4 @@
 from osint_harness.domain.investigation import Investigation
-from osint_harness.domain.provenance import SourceReliability
 
 
 class Dossier:
@@ -14,7 +13,13 @@ class Dossier:
         self._investigation = investigation
 
     def as_markdown(self) -> str:
-        """The report, written for a human analyst."""
+        """The report, written for a human analyst.
+
+        Deliberately does not re-check that citations are grounded. `Investigation` refuses to be
+        constructed or reloaded holding an unbacked citation, and Dissemination refuses to conclude
+        on one, so a renderer repeating the check would be re-litigating a decision two boundaries
+        above it have already made.
+        """
         sections = [
             self._heading(),
             self._verdict(),
@@ -57,7 +62,8 @@ class Dossier:
                 f"{len(investigation.tool_calls())} lookups · "
                 f"{investigation.token_cost()} tokens · "
                 f"verdict changed {investigation.verdict_changes()} times, "
-                f"settling at step {investigation.steps_to_stable_verdict()}",
+                f"settling after assessment {investigation.assessments_to_stable_verdict()} "
+                f"of {len(investigation.assessments)}",
             ]
         )
 
@@ -115,7 +121,8 @@ class Dossier:
                 "",
                 "Graded on the Admiralty scale: source reliability A-F grades the publisher, "
                 "information credibility 1-6 grades the individual claim. They are separate "
-                "judgments.",
+                "judgments. Each grade carries the reason it was given, because a bare letter "
+                "with nothing behind it is a decoration rather than an assessment.",
                 "",
                 "| ID | Assertion | Publisher | Reliability | Credibility | Citation |",
                 "| --- | --- | --- | --- | --- | --- |",
@@ -124,10 +131,8 @@ class Dossier:
         )
 
     def _grade_of(self, domain: str) -> str:
-        grade = self._investigation.source_grades.get(
-            domain, SourceReliability.CANNOT_BE_JUDGED
-        )
-        return grade.value
+        source = self._investigation.source_for(domain)
+        return f"{source.reliability.value} — {source.reason}"
 
     def _conflicts(self) -> str:
         conflicts = self._investigation.findings.conflicts

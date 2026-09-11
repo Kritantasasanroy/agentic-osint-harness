@@ -1,7 +1,8 @@
 from enum import StrEnum
 from itertools import pairwise
+from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from osint_harness.domain.analysis import (
     Assessment,
@@ -10,7 +11,7 @@ from osint_harness.domain.analysis import (
     Hypothesis,
     Judgment,
 )
-from osint_harness.domain.provenance import Document, SourceReliability
+from osint_harness.domain.provenance import Document, Source, SourceReliability
 from osint_harness.domain.subject import AnySubject
 
 
@@ -157,6 +158,8 @@ class Step(BaseModel):
 class Investigation(BaseModel):
     """One episode of work on one subject, from opening question to findings report."""
 
+    SUFFICIENT_EVIDENCE_WEIGHT: ClassVar[float] = 0.8
+
     run_id: str
     subject: AnySubject
     memory_mode: MemoryMode
@@ -168,9 +171,35 @@ class Investigation(BaseModel):
     hypotheses: list[Hypothesis] = Field(default_factory=list)
     assessments: list[Assessment] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)
-    source_grades: dict[str, SourceReliability] = Field(default_factory=dict)
+    source_grades: dict[str, Source] = Field(default_factory=dict)
     recalled_priors: tuple[Recollection, ...] = ()
     findings: Findings = Field(default_factory=Findings)
+
+    @model_validator(mode="after")
+    def _every_citation_is_grounded(self) -> "Investigation":
+        """Refuse to exist holding evidence that cites a document this episode never retrieved.
+
+        `record_evidence` already refuses one at a time, but that guards only the live path. This
+        guards construction and deserialisation too, so a record cannot be assembled or reloaded
+        from disk carrying a citation with nothing behind it.
+        """
+        unbacked = [
+            item.document_url
+            for item in self.evidence.values()
+            if item.document_url not in self.documents
+        ]
+        if unbacked:
+            raise ValueError(
+                f"investigation {self.run_id} holds {len(unbacked)} citations with no retrieved "
+                f"document behind them ({', '.join(unbacked[:3])})"
+            )
+        if not self.assessments:
+            raise ValueError(
+                f"investigation {self.run_id} has no assessment; open it with "
+                "Investigation.open(), which records a baseline so the confidence series and "
+                "every metric derived from it are never empty"
+            )
+        return self
 
     @classmethod
     def open(
@@ -199,10 +228,12 @@ class Investigation(BaseModel):
             ],
         )
 
-    def record_document(self, document: Document, grade: SourceReliability) -> None:
-        """Store a retrieved document and the source grade applied to it at retrieval time."""
+    def record_document(self, document: Document) -> None:
+        """Store a retrieved document, registering its publisher as seen but not yet judged."""
         self.documents[document.url] = document
-        self.source_grades[document.source_domain] = grade
+        if document.source_domain not in self.source_grades:
+            self.source_grades[document.source_domain] = Source(domain=document.source_domain)
+        self.source_grades[document.source_domain].note_appearance()
 
     def record_evidence(self, evidence: Evidence) -> str:
         """Store an extracted assertion, refusing any that does not trace to a held document."""
@@ -214,9 +245,23 @@ class Investigation(BaseModel):
         self.evidence[evidence.identifier] = evidence
         return evidence.identifier
 
-    def grade_source(self, domain: str, reliability: SourceReliability) -> None:
-        """Apply a publisher's reliability grade for the remainder of this investigation."""
-        self.source_grades[domain] = reliability
+    def grade_source(self, domain: str, reliability: SourceReliability, reason: str) -> None:
+        """Grade a publisher, keeping the justification beside the grade rather than discarding it.
+
+        A bare letter with no reason behind it is a decoration, not an assessment, so the reason is
+        carried on the source and rendered in the report next to the grade it explains.
+        """
+        if domain not in self.source_grades:
+            self.source_grades[domain] = Source(domain=domain)
+        self.source_grades[domain].regrade(reliability, reason)
+
+    def source_for(self, domain: str) -> Source:
+        """The publisher record for a domain, unjudged if it has not been graded."""
+        return self.source_grades.get(domain, Source(domain=domain))
+
+    def reliability_of(self, domain: str) -> SourceReliability:
+        """The grade applied to a publisher during this investigation."""
+        return self.source_for(domain).reliability
 
     def record_findings(self, findings: Findings) -> None:
         """Attach the written report produced by dissemination."""
@@ -245,9 +290,7 @@ class Investigation(BaseModel):
     def evidence_weights(self) -> dict[str, float]:
         """Each evidence item's ACH weight, from its source's grade and its own credibility."""
         return {
-            identifier: item.weight(
-                self.source_grades.get(item.source_domain, SourceReliability.CANNOT_BE_JUDGED)
-            )
+            identifier: item.weight(self.reliability_of(item.source_domain))
             for identifier, item in self.evidence.items()
         }
 
@@ -260,14 +303,29 @@ class Investigation(BaseModel):
         """Combined strength of everything gathered, used to decide evidential sufficiency."""
         return sum(self.evidence_weights().values())
 
+    def has_sufficient_evidence(self) -> bool:
+        """Whether what was gathered could carry a conclusive verdict at all.
+
+        Defined once, here, because two places need it and they must not drift: the agent uses it
+        to refuse a verdict it cannot support, and the evaluation uses it to tag a wrong answer as
+        having rested on thin evidence. If those two thresholds disagreed, the harness would
+        penalise the agent for a judgment it had itself been allowed to make.
+        """
+        return self.total_evidence_weight() >= self.SUFFICIENT_EVIDENCE_WEIGHT
+
     def verdict_changes(self) -> int:
         """How many times the judgment flipped across the assessment series."""
         return sum(
             1 for earlier, later in pairwise(self.assessments) if not earlier.agrees_with(later)
         )
 
-    def steps_to_stable_verdict(self) -> int:
-        """Index from which the judgment never changes again. Not merely its first appearance."""
+    def assessments_to_stable_verdict(self) -> int:
+        """How many assessments were made before the judgment stopped changing.
+
+        This counts positions in the assessment series, not steps. The two differ: a phase that
+        reaches no new conclusion appends no assessment, so an episode of six steps may hold only
+        two assessments. Naming it for steps would misreport convergence.
+        """
         final = self.assessments[-1].judgment
         index = len(self.assessments) - 1
         while index > 0 and self.assessments[index - 1].judgment is final:

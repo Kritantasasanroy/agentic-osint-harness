@@ -80,7 +80,7 @@ class TestCassetteStorage:
         key = Cassette.key_for("web", "Acme")
         cassette.record(key, RecordedCall(tool="web", query="Acme", documents=(_document(),)))
         path = tmp_path / "nested" / "cassette.json"
-        cassette.save(path)
+        cassette.write_to(path)
 
         reloaded = Cassette.load(path)
         assert reloaded.replay(key) == (_document(),)
@@ -92,7 +92,7 @@ class TestCassetteStorage:
 
     def test_mode_is_not_written_into_the_recording(self, tmp_path: Path) -> None:
         path = tmp_path / "c.json"
-        Cassette(mode=CassetteMode.RECORD).save(path)
+        Cassette(mode=CassetteMode.RECORD).write_to(path)
         assert "record" not in path.read_text(encoding="utf-8")
 
     def test_replaying_an_unrecorded_key_is_an_error_not_an_empty_result(self) -> None:

@@ -167,7 +167,7 @@ series, the step series, the budget, and the current phase. Everything above exc
 off it, and everything is saved with it — an investigation holding evidence that references a
 missing document is corrupt, which is what makes this one transaction unit.
 
-Derived behaviour lives here because the data does: `verdict_changes()`, `steps_to_stable_verdict()`,
+Derived behaviour lives here because the data does: `verdict_changes()`, `assessments_to_stable_verdict()`,
 `tool_call_count()`, `token_cost()`, `source_diversity()`. These are read-only facts *about* the
 investigation, not the agent observing its own score — reward is computed elsewhere, offline, and is
 never visible to the agent.
@@ -284,11 +284,20 @@ for what a few lines cover.
 This is a CLI, so the "API resources" question resolves to commands:
 
 ```
-osint-harness investigate --subject <name> --kind company|person|claim [--memory MODE] [--offline]
-osint-harness investigate --case <case-id> [--memory MODE] [--offline]
-osint-harness bench [--memory MODE] [--cases <ids>]
-osint-harness report <run-id>
-osint-harness record --cases <ids>        # live pass; requires ANTHROPIC_API_KEY
+osint-harness cases                                  # list the benchmark subjects and claims
+osint-harness investigate <case-id> [--memory MODE]  # one case; replays offline by default
+osint-harness bench [--memory MODE]                  # every case in one memory mode
+osint-harness ablate                                 # every case in all three modes, and compare
+
+# Global flags, accepted before or after the subcommand:
+#   --live       use the hosted model instead of the rehearsed analyst (needs an API key)
+#   --record     allow live retrieval and write it to the cassette (otherwise replay only)
+#   --max-steps  per-episode step ceiling
+
+# Note: offline replay is the DEFAULT rather than an --offline flag, which is a stronger guarantee
+# than an opt-in. There is deliberately no command to investigate an ad-hoc subject yet: every run
+# is a benchmark case, so every run is scoreable. `Investigator.investigate()` already accepts any
+# subject, so adding one is a CLI change only.
 ```
 
 ---

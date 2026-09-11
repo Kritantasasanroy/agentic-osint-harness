@@ -31,10 +31,6 @@ class SourceReliability(StrEnum):
             case SourceReliability.CANNOT_BE_JUDGED:
                 return 0.1
 
-    def carries_a_finding_alone(self) -> bool:
-        """Whether this grade is strong enough to support a finding without corroboration."""
-        return self in (SourceReliability.COMPLETELY_RELIABLE, SourceReliability.USUALLY_RELIABLE)
-
 
 class InformationCredibility(StrEnum):
     """Admiralty grading of a specific assertion, independent of who published it."""

@@ -38,20 +38,29 @@ class StepReward(BaseModel):
         return self.information_gain + self.retrieval_gain - self.cost
 
     @classmethod
-    def earned(cls, step: Step, weights: Mapping[str, float]) -> "StepReward":
+    def earned(
+        cls,
+        step: Step,
+        weights: Mapping[str, float],
+        already_credited: frozenset[str] = frozenset(),
+    ) -> "StepReward":
         """Score one recorded step against the Admiralty weight of the evidence it produced.
 
-        Information gain counts only evidence first recorded at this step, so re-reading a source
-        already cited earns nothing. Retrieval is credited far more lightly than extraction, because
-        fetching documents nobody reads is activity rather than progress.
+        Each distinct piece of evidence is credited exactly once across the whole trajectory.
+        Evidence identifiers are content-derived, so an extraction that repeats an assertion
+        already recorded returns the same identifier; counting occurrences rather than distinct
+        items would let a repetition inflate the reward above the evidence the episode actually
+        holds. Retrieval is credited far more lightly than extraction, because fetching documents
+        nobody reads is activity rather than progress.
         """
         retrieved = sum(call.documents_returned for call in step.tool_calls if call.succeeded)
         failed = len(step.failed_tool_calls())
+        fresh = cls.newly_credited(step, already_credited)
         return cls(
             step_index=step.index,
             phase=step.phase,
             information_gain=cls.EVIDENCE_CREDIT
-            * sum(weights.get(identifier, 0.0) for identifier in step.evidence_added),
+            * sum(weights.get(identifier, 0.0) for identifier in fresh),
             retrieval_gain=cls.RETRIEVAL_CREDIT * retrieved,
             cost=(
                 cls.TOKEN_COST_PER_THOUSAND * (step.tokens() / 1000.0)
@@ -61,10 +70,25 @@ class StepReward(BaseModel):
         )
 
     @classmethod
+    def newly_credited(cls, step: Step, already_credited: frozenset[str]) -> tuple[str, ...]:
+        """The evidence this step introduced that no earlier step has been paid for."""
+        return tuple(
+            identifier
+            for identifier in dict.fromkeys(step.evidence_added)
+            if identifier not in already_credited
+        )
+
+    @classmethod
     def series(cls, investigation: Investigation) -> tuple["StepReward", ...]:
         """The whole trajectory scored step by step, which is what progression is read from."""
         weights = investigation.evidence_weights()
-        return tuple(cls.earned(step, weights) for step in investigation.steps)
+        credited: set[str] = set()
+        rewards: list[StepReward] = []
+        for step in investigation.steps:
+            frozen = frozenset(credited)
+            rewards.append(cls.earned(step, weights, frozen))
+            credited.update(cls.newly_credited(step, frozen))
+        return tuple(rewards)
 
 
 class EpisodeReward(BaseModel):

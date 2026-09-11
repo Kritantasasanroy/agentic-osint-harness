@@ -61,12 +61,12 @@ class TestArchiveStorage:
         archive = InvestigationArchive()
         archive.remember(Episode.concluded("run-1", Company(name="Acme Corp")))
         path = tmp_path / "nested" / "archive.json"
-        archive.save(path)
+        archive.write_to(path)
 
-        assert InvestigationArchive.load(path).episodes["run-1"].descriptor == "Acme Corp"
+        assert InvestigationArchive.read_from(path).episodes["run-1"].descriptor == "Acme Corp"
 
     def test_loading_a_missing_archive_starts_empty(self, tmp_path: Path) -> None:
-        assert InvestigationArchive.load(tmp_path / "absent.json").episodes == {}
+        assert InvestigationArchive.read_from(tmp_path / "absent.json").episodes == {}
 
 
 class TestRecall:
@@ -123,7 +123,7 @@ class TestRecall:
 class TestSourceRegister:
     def _graded(self, run_id: str, domain: str, grade: SourceReliability) -> Investigation:
         investigation = Episode.concluded(run_id, Company(name="Acme Corp"))
-        investigation.grade_source(domain, grade)
+        investigation.grade_source(domain, grade, f"assessed during {run_id}")
         return investigation
 
     def test_learns_an_assessed_grade(self) -> None:
@@ -159,8 +159,8 @@ class TestSourceRegister:
         register = SourceRegister()
         register.learn_from(self._graded("run-1", "ft.com", SourceReliability.USUALLY_RELIABLE))
         path = tmp_path / "sources.json"
-        register.save(path)
+        register.write_to(path)
 
-        assert SourceRegister.load(path).known_grades()["ft.com"] is (
+        assert SourceRegister.read_from(path).known_grades()["ft.com"] is (
             SourceReliability.USUALLY_RELIABLE
         )

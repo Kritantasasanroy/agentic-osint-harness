@@ -56,8 +56,10 @@ subjects, and is attributed automatically because a `Recollection` carries the e
 Both of these could have been prompt instructions. Prompt instructions are not guarantees.
 
 1. **Memory can never be cited.** The archive stores conclusions and holds no document and no URL,
-   so there is no path from a recollection to a citation. Verified by tracing every constructor of
-   `Evidence`.
+   but that alone proved insufficient: an independent auditor assembled an `Investigation` outside
+   the guarded path and rendered a clean-looking forged citation. The guarantee now rests on
+   `Evidence` having one construction site behind `record_evidence`, plus a validator that refuses
+   to construct or reload a record holding an unbacked citation.
 2. **Ground truth cannot reach a prompt.** The investigator's signature accepts a `Subject`; nothing
    accepts a `BenchmarkCase`. The object holding the answer never crosses the boundary.
 
@@ -72,9 +74,11 @@ Two specific decisions inside that:
 - **Calibration is half Brier, half defensible-band membership.** Brier alone is minimised by
   hedging every answer to even odds, which is precisely the behaviour an investigator must not be
   rewarded for. The band term punishes hedging and overclaiming alike.
-- **Abstention scores zero in both directions.** Declining where a verdict was available, and
-  committing where abstention was the only honest answer, both earn nothing — no partial credit.
-  These are the two failures the harness exists to catch.
+- **Abstention scores zero on correctness in both directions.** Declining where a verdict was
+  available, and committing where abstention was the only honest answer, both score zero on the
+  correctness component — no partial credit, where a supported/partially-supported miss earns half.
+  Other components still contribute, deliberately: a wrong verdict resting on real, well-graded
+  sources is not the same failure as an invented one.
 
 ### Refusal fallbacks left off, against the vendor's own advice
 
@@ -101,12 +105,23 @@ have abstention as the *correct* answer, and one (Michael Jordan the researcher)
 designed so that abstention is *wrong* despite a famous namesake making it tempting. Without the
 floor cases, an agent that abstains on everything would look cautious rather than useless.
 
-**Independent review caught things self-review would not have.** Eight audit rounds, all clean, but
-the auditor overruled the author twice on substance: once ruling that `INSUFFICIENT_EVIDENCE` is a
-judgment rather than a hypothesis (a refusal to commit cannot be disconfirmed, so it has no place in
-an ACH matrix), and once confirming a memory-poisoning bug in which "keep the more cautious grade"
-would have pinned every publisher at the lowest grade forever, since every publisher starts
-ungraded.
+**Per-slice review was not enough, and the final audit proved it.** Eight slice-by-slice audits all
+returned clean. A final independent audit over the whole codebase then returned **violations**, and
+the most serious was invisible to every earlier round: `Reconciliation` and `Dissemination` read the
+evidence through accessors that bypassed the memory gate, so the `none` control arm leaked the very
+state it is defined by withholding. It survived because the test asserted on the briefing header
+rather than on the prompt actually sent to the model.
+
+The same audit found that long-term memory persisted between invocations, so the harmful-retrieval
+rate moved from 14% to 29% on a second run of the same command — the headline number was an artefact
+of how many times it had been run. It also found a metric indexing the assessment series while being
+labelled a step count, the Admiralty grading *reason* being generated and then discarded, and the
+narrative half of the report carrying no grounding check at all.
+
+All are fixed, each with a regression test naming the defect. `ablate` now produces byte-identical
+output across invocations, verified. The lesson generalises: slice-local review cannot see a
+property that is only violated by the interaction between slices, and a test that asserts on an
+intermediate rather than on the real output will pass while the property it names is false.
 
 ## 4. Limitations
 
@@ -133,8 +148,10 @@ but not enough for statistical confidence in any single rate. Non-English source
 records, and beneficial-ownership chains are untested.
 
 **Convergence is barely exercised.** Because the stand-in analyst reaches the same verdict every
-time, verdict-change and steps-to-stable-verdict are all zero in the shipped run. The metrics are
-implemented and tested, but the shipped data cannot demonstrate them.
+time, verdict-change and assessments-to-stable-verdict are all zero in the shipped run. The metrics
+are implemented and tested, but the shipped data cannot demonstrate them. Note the rename: an
+independent audit found this metric was indexing the assessment series while being labelled and
+reported as a step count, so a six-step episode read as "settling at step 0".
 
 ## 5. What I would do next, in order
 

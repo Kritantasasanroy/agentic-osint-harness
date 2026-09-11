@@ -76,7 +76,7 @@ class Episode:
     @classmethod
     def with_document(cls) -> Investigation:
         investigation = cls.opened()
-        investigation.record_document(cls.document(), SourceReliability.CANNOT_BE_JUDGED)
+        investigation.record_document(cls.document())
         return investigation
 
     @classmethod
@@ -242,7 +242,9 @@ class TestAppraisal:
         Appraisal(model).advance(investigation)
 
         assert len(investigation.evidence) == 1
-        assert investigation.source_grades["reuters.com"] is SourceReliability.COMPLETELY_RELIABLE
+        graded = investigation.source_for("reuters.com")
+        assert graded.reliability is SourceReliability.COMPLETELY_RELIABLE
+        assert "wire service" in graded.reason
 
     def test_an_assertion_citing_an_unretrieved_document_is_refused_and_reported(self) -> None:
         model = ScriptedModel()

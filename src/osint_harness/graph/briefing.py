@@ -1,3 +1,4 @@
+from osint_harness.domain.analysis import Evidence
 from osint_harness.domain.investigation import Investigation
 from osint_harness.domain.provenance import Document
 
@@ -69,7 +70,12 @@ class Briefing:
         return "OPEN LEADS:\n" + lines
 
     def hypotheses(self) -> str:
-        """The competing explanations, numbered so they can be referred to by position."""
+        """The competing explanations, numbered so they can be referred to by position.
+
+        Deliberately not gated by memory mode. Hypotheses state the question under investigation
+        rather than accumulate findings, and without them there is no ACH matrix to score at all,
+        so withholding them would not model a weaker memory — it would remove the method.
+        """
         if not self._investigation.hypotheses:
             return ""
         lines = "\n".join(
@@ -78,16 +84,35 @@ class Briefing:
         )
         return "HYPOTHESES:\n" + lines
 
+    def visible_evidence(self) -> dict[str, Evidence]:
+        """The evidence this phase is allowed to see, after the memory mode is applied.
+
+        Under `NONE` this narrows to what the immediately preceding phase produced, because a phase
+        with no working memory has no access to what earlier rounds found. This gate is the reason
+        `NONE` is a real control arm rather than a label.
+        """
+        investigation = self._investigation
+        if investigation.memory_mode.carries_working_state():
+            return investigation.evidence
+        if not investigation.steps:
+            return {}
+        produced = set(investigation.steps[-1].evidence_added)
+        return {
+            identifier: item
+            for identifier, item in investigation.evidence.items()
+            if identifier in produced
+        }
+
     def evidence(self) -> str:
-        """Everything gathered, with the identifier each item must be referred to by."""
-        if not self._investigation.evidence:
+        """The visible evidence, with the identifier each item must be referred to by."""
+        visible = self.visible_evidence()
+        if not visible:
             return ""
-        grades = self._investigation.source_grades
         lines = "\n".join(
             f"[{identifier}] ({item.source_domain}, source grade "
-            f"{grades[item.source_domain].value if item.source_domain in grades else 'F'}, "
+            f"{self._investigation.reliability_of(item.source_domain).value}, "
             f"credibility {item.credibility.value}) {item.assertion}"
-            for identifier, item in self._investigation.evidence.items()
+            for identifier, item in visible.items()
         )
         return "EVIDENCE GATHERED:\n" + lines
 

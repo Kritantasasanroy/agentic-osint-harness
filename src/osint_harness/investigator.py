@@ -96,4 +96,6 @@ class Investigator:
         if not investigation.memory_mode.recalls_past_episodes():
             return
         for domain, grade in self._register.known_grades().items():
-            investigation.grade_source(domain, grade)
+            investigation.grade_source(
+                domain, grade, f"recalled: {self._register.reason_for(domain)}"
+            )

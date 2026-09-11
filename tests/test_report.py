@@ -46,8 +46,10 @@ class Finished:
                 title="Acme files accounts",
                 text="Acme Corp filed accounts for 2024.",
                 retrieved_at=datetime(2026, 1, 2, tzinfo=UTC),
-            ),
-            SourceReliability.COMPLETELY_RELIABLE,
+            )
+        )
+        investigation.grade_source(
+            "reuters.com", SourceReliability.COMPLETELY_RELIABLE, "major wire service"
         )
         identifier = investigation.record_evidence(
             Evidence(

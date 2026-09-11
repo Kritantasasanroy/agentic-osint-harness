@@ -1,5 +1,7 @@
+import re
 from abc import abstractmethod
 from time import perf_counter
+from typing import ClassVar
 
 import httpx
 
@@ -11,7 +13,7 @@ from osint_harness.domain.investigation import (
     ToolCall,
     UngroundedEvidenceError,
 )
-from osint_harness.domain.provenance import Source, SourceReliability
+from osint_harness.domain.provenance import Source
 from osint_harness.graph.briefing import Briefing
 from osint_harness.graph.machine import Node, Transition
 from osint_harness.graph.schemas import (
@@ -23,7 +25,7 @@ from osint_harness.graph.schemas import (
     ReflectionResult,
     ReportDraft,
 )
-from osint_harness.model.client import ModelClient, SearchResult
+from osint_harness.model.client import ModelClient, ModelUnavailableError, SearchResult
 from osint_harness.sources.cassette import CassetteMissError
 from osint_harness.sources.tools import Tool
 
@@ -191,13 +193,27 @@ class Collection(Phase):
         return tuple(seen)[: self.MAX_READS]
 
     def _search(self, query: str) -> tuple[ToolCall, tuple[SearchResult, ...]]:
+        """Search, recording a failed search as a failure rather than as an empty success."""
         started = perf_counter()
-        findings = self._model.search(query)
+        try:
+            findings = self._model.search(query)
+        except ModelUnavailableError as failure:
+            return (
+                ToolCall(
+                    tool="web_search",
+                    query=query,
+                    documents_returned=0,
+                    succeeded=False,
+                    latency_seconds=perf_counter() - started,
+                    failure_reason=str(failure),
+                ),
+                (),
+            )
         return (
             ToolCall(
                 tool="web_search",
                 query=query,
-                documents_returned=0,
+                documents_returned=len(findings.results),
                 succeeded=True,
                 latency_seconds=perf_counter() - started,
             ),
@@ -219,12 +235,7 @@ class Collection(Phase):
                 failure_reason=str(failure),
             )
         for document in documents:
-            investigation.record_document(
-                document,
-                investigation.source_grades.get(
-                    document.source_domain, SourceReliability.CANNOT_BE_JUDGED
-                ),
-            )
+            investigation.record_document(document)
         return ToolCall(
             tool=tool.name,
             query=query,
@@ -255,7 +266,9 @@ class Appraisal(Phase):
         result = self._model.decide("appraisal", self.analyst_brief(), prompt, AppraisalResult)
 
         for grading in result.gradings:
-            investigation.grade_source(grading.domain, grading.reliability)
+            investigation.grade_source(
+                grading.domain, grading.reliability, grading.reason or "no reason recorded"
+            )
 
         recorded: list[str] = []
         ungrounded = 0
@@ -284,8 +297,6 @@ class Appraisal(Phase):
 
 class Reconciliation(Phase):
     """Scores the evidence against every hypothesis and records where that leaves the question."""
-
-    MINIMUM_EVIDENCE_WEIGHT = 0.8
 
     def conduct(self, investigation: Investigation) -> Transition:
         briefing = Briefing(investigation)
@@ -332,7 +343,7 @@ class Reconciliation(Phase):
         self, investigation: Investigation, result: ReconciliationResult
     ) -> tuple[Judgment, float]:
         """Refuse a conclusive verdict the gathered evidence cannot actually carry."""
-        if investigation.total_evidence_weight() < self.MINIMUM_EVIDENCE_WEIGHT:
+        if not investigation.has_sufficient_evidence():
             return (Judgment.INSUFFICIENT_EVIDENCE, min(result.probability, 0.5))
         return (result.judgment, result.probability)
 
@@ -386,6 +397,9 @@ class Reflection(Phase):
 class Dissemination(Phase):
     """Writes the findings report, after proving every citation traces to a retrieved document."""
 
+    LINK = re.compile(r"https?://[^\s)\]]+")
+    TRAILING_PUNCTUATION: ClassVar[str] = ".,;:)]"
+
     def conduct(self, investigation: Investigation) -> Transition:
         unbacked = investigation.ungrounded_citations()
         if unbacked:
@@ -406,6 +420,13 @@ class Dissemination(Phase):
         )
         draft = self._model.decide("dissemination", self.analyst_brief(), prompt, ReportDraft)
 
+        invented = self.unbacked_links(draft, investigation)
+        if invented:
+            raise UngroundedEvidenceError(
+                f"refusing to report: the narrative cites {len(invented)} links no document "
+                f"backs ({', '.join(invented[:3])})"
+            )
+
         investigation.record_findings(
             Findings(
                 summary=draft.summary,
@@ -421,4 +442,26 @@ class Dissemination(Phase):
                 f"{len(investigation.evidence)} pieces of evidence from "
                 f"{investigation.source_diversity()} sources"
             ),
+        )
+
+    @classmethod
+    def unbacked_links(
+        cls, draft: ReportDraft, investigation: Investigation
+    ) -> tuple[str, ...]:
+        """Links the narrative introduced that no retrieved document stands behind.
+
+        The evidence table is grounded by `record_evidence`, but the written narrative is free text
+        and could otherwise smuggle in a citation nothing supports. This catches an invented link;
+        it cannot catch an invented sentence carrying no link, which is stated as a limitation
+        rather than papered over.
+        """
+        written = " ".join(
+            [draft.summary, *draft.key_findings, *draft.gaps, *draft.conflicts]
+        )
+        return tuple(
+            link
+            for link in (
+                found.rstrip(cls.TRAILING_PUNCTUATION) for found in cls.LINK.findall(written)
+            )
+            if link not in investigation.documents
         )

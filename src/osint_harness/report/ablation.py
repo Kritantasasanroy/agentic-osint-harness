@@ -66,14 +66,14 @@ class Ablation(BaseModel):
         header = [
             "### Cost and convergence",
             "",
-            "| Memory | Total tokens | Reward per 1k tokens | Mean steps to stable verdict | "
-            "Mean verdict changes |",
+            "| Memory | Total tokens | Reward per 1k tokens | Mean assessments to a stable "
+            "verdict | Mean verdict changes |",
             "| --- | --- | --- | --- | --- |",
         ]
         rows = [
             f"| `{run.memory_mode.value}` | {run.total_tokens():,} | "
             f"{run.reward_per_thousand_tokens():.4f} | "
-            f"{run.mean_steps_to_stable_verdict():.2f} | {run.mean_verdict_changes():.2f} |"
+            f"{run.mean_assessments_to_stable_verdict():.2f} | {run.mean_verdict_changes():.2f} |"
             for run in self.runs
         ]
         return "\n".join(header + rows)

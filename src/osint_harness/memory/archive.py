@@ -1,6 +1,4 @@
-import json
 from difflib import SequenceMatcher
-from pathlib import Path
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,6 +7,7 @@ from osint_harness.domain.analysis import Judgment
 from osint_harness.domain.investigation import Investigation, Recollection
 from osint_harness.domain.provenance import SourceReliability
 from osint_harness.domain.subject import Subject, SubjectKind
+from osint_harness.storage import Persisted
 
 
 class RememberedInvestigation(BaseModel):
@@ -55,7 +54,7 @@ class RememberedInvestigation(BaseModel):
         )
 
 
-class InvestigationArchive(BaseModel):
+class InvestigationArchive(Persisted):
     """Finished investigations kept across episodes. This is what long-term memory actually is.
 
     Recall is lexical, matching on the subject's description. That is a deliberate choice rather
@@ -67,19 +66,6 @@ class InvestigationArchive(BaseModel):
     episodes: dict[str, RememberedInvestigation] = Field(default_factory=dict)
 
     MATCH_THRESHOLD: ClassVar[float] = 0.55
-
-    @classmethod
-    def load(cls, path: Path) -> "InvestigationArchive":
-        """Read the archive, or start an empty one where none exists yet."""
-        if not path.exists():
-            return cls()
-        return cls.model_validate_json(path.read_text(encoding="utf-8"))
-
-    def save(self, path: Path) -> None:
-        """Persist the archive so the next episode can recall this one."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.loads(self.model_dump_json())
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
     def remember(self, investigation: Investigation) -> None:
         """Commit a finished investigation to memory."""
@@ -105,7 +91,7 @@ class InvestigationArchive(BaseModel):
         return SequenceMatcher(None, wanted.lower(), remembered.lower()).ratio()
 
 
-class SourceRegister(BaseModel):
+class SourceRegister(Persisted):
     """Publisher reliability accumulated across episodes: the second half of long-term memory.
 
     Grading a publisher is work an investigation should not have to repeat from scratch each time,
@@ -115,19 +101,6 @@ class SourceRegister(BaseModel):
     grades: dict[str, SourceReliability] = Field(default_factory=dict)
     reasons: dict[str, str] = Field(default_factory=dict)
 
-    @classmethod
-    def load(cls, path: Path) -> "SourceRegister":
-        """Read the register, or start an empty one where none exists yet."""
-        if not path.exists():
-            return cls()
-        return cls.model_validate_json(path.read_text(encoding="utf-8"))
-
-    def save(self, path: Path) -> None:
-        """Persist what has been learned about publishers."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.loads(self.model_dump_json())
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-
     def learn_from(self, investigation: Investigation) -> None:
         """Adopt the grades an investigation actually assessed.
 
@@ -135,12 +108,16 @@ class SourceRegister(BaseModel):
         of information rather than a poor verdict, so it teaches the register nothing and is
         skipped. Recording it would pin every publisher at the lowest grade on first sighting.
         """
-        for domain, grade in investigation.source_grades.items():
-            if grade is SourceReliability.CANNOT_BE_JUDGED:
+        for domain, source in investigation.source_grades.items():
+            if source.reliability is SourceReliability.CANNOT_BE_JUDGED:
                 continue
-            self.grades[domain] = grade
-            self.reasons[domain] = f"graded during {investigation.run_id}"
+            self.grades[domain] = source.reliability
+            self.reasons[domain] = source.reason
 
     def known_grades(self) -> dict[str, SourceReliability]:
         """Everything learned so far, to seed a new investigation."""
         return dict(self.grades)
+
+    def reason_for(self, domain: str) -> str:
+        """Why a publisher carries the grade it does, carried forward with the grade itself."""
+        return self.reasons.get(domain, "no reason recorded")

@@ -41,6 +41,17 @@ class Workspace:
         """Learned publisher grades, likewise kept per mode."""
         return self._root / "runs" / f"sources-{memory_mode.value}.json"
 
+    def forget(self, memory_mode: MemoryMode) -> None:
+        """Clear a mode's long-term memory before a sweep.
+
+        Without this the archive on disk is hidden state outside `(case, memory mode, cassette)`,
+        and a second run of the same command reports different numbers because it recalls the first
+        run's episodes. Memory still accumulates *within* a sweep, which is what the `long` arm is
+        for; it just no longer leaks between invocations.
+        """
+        for path in (self.archive_path(memory_mode), self.register_path(memory_mode)):
+            path.unlink(missing_ok=True)
+
     def run_directory(self, run_id: str) -> Path:
         """Where one episode's report and record are written."""
         directory = self._root / "runs" / run_id
@@ -76,8 +87,8 @@ class Harness:
             model=self.model(),
             encyclopedia=Encyclopedia(self._cassette),
             pages=PageFetch(self._cassette),
-            archive=InvestigationArchive.load(self._workspace.archive_path(memory_mode)),
-            register=SourceRegister.load(self._workspace.register_path(memory_mode)),
+            archive=InvestigationArchive.read_from(self._workspace.archive_path(memory_mode)),
+            register=SourceRegister.read_from(self._workspace.register_path(memory_mode)),
         )
 
     def investigate(
@@ -98,7 +109,12 @@ class Harness:
     def sweep(
         self, cases: tuple[BenchmarkCase, ...], memory_mode: MemoryMode, budget: Budget
     ) -> BenchmarkRun:
-        """Run every case in one memory mode, keeping failures in the denominator."""
+        """Run every case in one memory mode, keeping failures in the denominator.
+
+        Memory is cleared first so the sweep is reproducible: the same command run twice reports
+        the same numbers.
+        """
+        self._workspace.forget(memory_mode)
         outcomes: list[CaseOutcome] = []
         for case in cases:
             investigation = self.investigate(case, memory_mode, budget)
@@ -113,10 +129,10 @@ class Harness:
         (directory / "investigation.json").write_text(dossier.as_json(), encoding="utf-8")
 
     def _persist(self, investigator: Investigator, memory_mode: MemoryMode) -> None:
-        investigator.archive().save(self._workspace.archive_path(memory_mode))
-        investigator.register().save(self._workspace.register_path(memory_mode))
+        investigator.archive().write_to(self._workspace.archive_path(memory_mode))
+        investigator.register().write_to(self._workspace.register_path(memory_mode))
         if self._record:
-            self._cassette.save(self._workspace.cassette_path())
+            self._cassette.write_to(self._workspace.cassette_path())
 
 
 class Invocation(BaseModel):

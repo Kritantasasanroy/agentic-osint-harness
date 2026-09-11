@@ -21,7 +21,7 @@ pip install -e ".[dev]"
 osint-harness cases                                  # the 14 benchmark subjects and claims
 osint-harness investigate ada-lovelace-person        # one investigation, replayed offline
 osint-harness ablate                                 # all 14 cases x 3 memory modes, with a report
-pytest && mypy && ruff check .                       # 175 tests, strict types, clean lint
+pytest && mypy && ruff check .                       # 207 tests, strict types, clean lint
 ```
 
 Reports land in `runs/<case>-<memory>/findings.md` and the ablation in `runs/results/ablation.md`.
@@ -113,10 +113,15 @@ measured ablation duly shows memory interference appearing only in `long` mode.
 
 ### 5. Memory can never become evidence, and that is structural
 
-The archive stores what an episode *concluded* — never what it read. It holds no document and no
-URL, so there is no code path by which something recalled can be cited. Recalled material enters a
-briefing explicitly labelled as unverified recall and barred from citation. This is enforced by the
-shape of the data rather than by asking the model to behave.
+The archive stores what an episode *concluded* — never what it read — and recalled material enters a
+briefing explicitly labelled as unverified recall.
+
+The guarantee does not rest on that labelling, nor on the archive's shape alone. It rests on one
+enforced rule: `Evidence` has a single construction site, and `record_evidence` refuses any item
+whose URL is not already in the documents this episode actually retrieved. An `Investigation` also
+refuses to be constructed or reloaded holding one. An independent auditor broke an earlier version
+of this claim — the archive's shape alone was not enough, because a record could be assembled
+outside the guarded path — and the validator exists because of that.
 
 ### 6. Ground truth cannot reach a prompt, and that is also structural
 
@@ -127,10 +132,11 @@ appear in any prompt the model saw.
 
 ### 7. Refusal fallbacks are deliberately disabled
 
-The model provider recommends enabling server-side fallbacks by default, which silently re-run a
-declined request on a different model. That would put episodes produced by **two different models**
+Server-side refusal fallbacks silently re-run a declined request on a different model. They are not
+configured here, deliberately: enabling them would put episodes produced by **two different models**
 into the same benchmark — the same class of error as comparing memory modes against different
-evidence. A refusal is raised, the episode is tagged, and it stays in the denominator.
+evidence. A refusal is raised, the episode is tagged, and it stays in the denominator. For a product
+that trade is usually worth making; for a measurement it is not.
 
 ### 8. Reward is decomposed, version-stamped, and computed offline
 
@@ -151,8 +157,10 @@ stamp; changing it bumps the version and invalidates every number carrying the o
 ### 9. Abstention is scored at zero in both directions
 
 Abstaining where a verdict was available, and committing where abstention was the only honest
-answer, both earn **nothing**. No partial credit. Those are the two failures this harness exists to
-catch, and softening either would hide exactly what it is meant to measure.
+answer, both score **zero on correctness** — no partial credit, where a supported/partially-supported
+miss gets half. The episode can still earn something on the other components, which is intended: an
+agent that reached the wrong verdict but cited real, well-graded sources did something better than
+one that invented them. Correctness is the largest single weight, so the penalty dominates.
 
 Related: `INSUFFICIENT_EVIDENCE` is a **judgment**, not a hypothesis. A refusal to commit makes no
 claim and therefore cannot be disconfirmed, so putting it in the ACH matrix would let "we don't
@@ -180,9 +188,10 @@ All four judgments and all seven traps are exercised, and a test fails if that s
 
 ## Honest status: what is and is not verified
 
-**Verified, by commands you can re-run:** 175 tests pass, `mypy --strict` is clean across 37 source
+**Verified, by commands you can re-run:** 207 tests pass, `mypy --strict` is clean across 40 source
 files, `ruff check` is clean, and a full 42-episode ablation (14 cases x 3 memory modes) runs end to
-end offline and writes its report.
+end offline and writes its report. Running `ablate` twice produces byte-identical output, which is
+what makes the numbers below quotable at all.
 
 **Not verified:** the live model path. No `ANTHROPIC_API_KEY` was available in the environment this
 was built in, so `LiveModel.decide()` and `LiveModel.search()` have **never executed**. Their
@@ -227,6 +236,22 @@ guidelines.md    the engineering standard this was built under
 
 Every slice was written against a written domain model, mechanically triaged, then audited by an
 independent reviewer with its own context that saw the code and the rules but never the author's
-justification. Eight rounds, all returned clean; the reviewer overruled the author twice on
-substance, and both corrections are in the code. The standard is in
-[`guidelines.md`](guidelines.md), and what it forbids is listed there before what it requires.
+justification. The standard is in [`guidelines.md`](guidelines.md), and what it forbids is listed
+there before what it requires.
+
+Eight slice audits returned clean. A final audit over the whole codebase then returned
+**violations** — and the worst of them was a defect no per-slice review could have seen: two phases
+read evidence through accessors that bypassed the memory gate, so the `none` control arm leaked the
+state it is defined by withholding. It survived eight rounds because the test asserted on the
+briefing header instead of on the prompt actually sent.
+
+That audit also found long-term memory leaking between invocations (the harmful-retrieval rate moved
+14% → 29% on a second run of the same command), a metric labelled as a step count while indexing the
+assessment series, the Admiralty grading *reason* generated and then thrown away, and the narrative
+half of the report carrying no grounding check. Every one is fixed, each with a regression test in
+[`tests/test_regressions.py`](tests/test_regressions.py) that names the defect it prevents.
+
+Those findings are recorded here rather than quietly repaired because the process working is the
+more useful thing to show. A separate adversarial pass also broke an earlier version of the
+memory-citation guarantee in §5, which is why it now rests on a validator rather than on the shape
+of the archive.

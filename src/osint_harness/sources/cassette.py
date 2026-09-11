@@ -1,11 +1,11 @@
 import hashlib
-import json
 from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from osint_harness.domain.provenance import Document
+from osint_harness.storage import Persisted
 
 
 class CassetteMissError(Exception):
@@ -29,7 +29,7 @@ class RecordedCall(BaseModel):
     documents: tuple[Document, ...] = ()
 
 
-class Cassette(BaseModel):
+class Cassette(Persisted):
     """Every external call an investigation made, so a benchmark run can be repeated exactly.
 
     This is what makes the memory ablation honest: all three memory modes replay byte-identical
@@ -48,18 +48,10 @@ class Cassette(BaseModel):
 
     @classmethod
     def load(cls, path: Path, mode: CassetteMode = CassetteMode.REPLAY) -> "Cassette":
-        """Read a cassette from disk, or start an empty one if the file does not exist yet."""
-        if not path.exists():
-            return cls(mode=mode)
-        cassette = cls.model_validate_json(path.read_text(encoding="utf-8"))
+        """Read a cassette from disk and put it into the mode this run needs."""
+        cassette = cls.read_from(path)
         cassette.mode = mode
         return cassette
-
-    def save(self, path: Path) -> None:
-        """Write the cassette to disk, creating the directory if needed."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.loads(self.model_dump_json())
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
     def holds(self, key: str) -> bool:
         """Whether this lookup has already been recorded."""

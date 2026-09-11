@@ -115,11 +115,22 @@ recalled material is structurally incapable of becoming a citation.
 | Maintain logs of the process | `Step`, appended once per transition, never mutated |
 | Evaluate across multiple cases | `bench/`, `benchmark/cases.json`, `report/ablation.py` |
 
-## Invariants the type system enforces
+## Invariants, and what actually enforces each
 
-- Evidence cannot be recorded against a document the episode never retrieved.
-- Assessments and steps are append-only, so confidence progression and convergence survive.
-- An investigation holds at least two competing hypotheses once Direction has run.
-- A report is not written at all while any citation lacks a document behind it.
-- A conclusive verdict is overridden to insufficient evidence when the evidence cannot carry it.
-- Every run is reproducible from `(case id, memory mode, cassette)`.
+Two of these are enforced by the type system; the rest are enforced by code at a named boundary.
+The distinction matters, so it is stated rather than blurred under one heading.
+
+- **Type system** — an `Investigation` cannot be constructed or deserialised holding a citation with
+  no retrieved document behind it, nor without a baseline assessment (`@model_validator`).
+- **Type system** — `Document`, `Evidence`, `Assessment` and `Step` are frozen, so the record of
+  what was found and concluded cannot be edited after the fact.
+- **Code, at `record_evidence`** — evidence cannot be added against a document never retrieved.
+- **Code, at the Direction transition** — fewer than two competing hypotheses falls back to the
+  subject's own, because a single-hypothesis investigation is confirmation bias by construction.
+- **Code, at Dissemination** — no report is written while any citation, or any link in the
+  narrative, lacks a document behind it.
+- **Code, at Reconciliation** — a conclusive verdict is overridden to insufficient evidence when the
+  gathered weight cannot carry it.
+- **Code, at the sweep boundary** — long-term memory is cleared before a sweep, so a run is
+  reproducible from `(case id, memory mode, cassette)`. Verified by running `ablate` twice and
+  comparing output.

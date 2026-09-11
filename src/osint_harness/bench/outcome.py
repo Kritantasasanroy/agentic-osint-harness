@@ -42,7 +42,6 @@ class Diagnosis(BaseModel):
     matters of degree (confidence stated slightly outside the defensible band).
     """
 
-    MINIMUM_USEFUL_EVIDENCE: ClassVar[float] = 0.8
     FAILED_CALL_SHARE: ClassVar[float] = 0.5
     UNSTABLE_VERDICT_CHANGES: ClassVar[int] = 3
     HASTY_STEP_COUNT: ClassVar[int] = 6
@@ -66,7 +65,7 @@ class Diagnosis(BaseModel):
         """
         assessment = investigation.latest_assessment()
         wrong = not case.was_reached(assessment.judgment)
-        thin = investigation.total_evidence_weight() < cls.MINIMUM_USEFUL_EVIDENCE
+        thin = not investigation.has_sufficient_evidence()
         return (
             (bool(investigation.ungrounded_citations()), FailureMode.FABRICATED_CITATION),
             (cls._mostly_failed_lookups(investigation), FailureMode.TOOL_FAILURE),
@@ -141,7 +140,7 @@ class CaseOutcome(BaseModel):
     step_rewards: tuple[StepReward, ...] = ()
     failure: FailureMode = FailureMode.NONE
     verdict_changes: int = Field(ge=0)
-    steps_to_stable_verdict: int = Field(ge=0)
+    assessments_to_stable_verdict: int = Field(ge=0)
     steps_taken: int = Field(ge=0)
     tool_calls: int = Field(ge=0)
     tokens: int = Field(ge=0)
@@ -171,7 +170,7 @@ class CaseOutcome(BaseModel):
             step_rewards=StepReward.series(investigation),
             failure=Diagnosis.of(investigation, case),
             verdict_changes=investigation.verdict_changes(),
-            steps_to_stable_verdict=investigation.steps_to_stable_verdict(),
+            assessments_to_stable_verdict=investigation.assessments_to_stable_verdict(),
             steps_taken=len(investigation.steps),
             tool_calls=len(investigation.tool_calls()),
             tokens=investigation.token_cost(),
@@ -276,11 +275,11 @@ class BenchmarkRun(BaseModel):
             counts[outcome.failure] += 1
         return {mode: count for mode, count in counts.items() if count}
 
-    def mean_steps_to_stable_verdict(self) -> float:
+    def mean_assessments_to_stable_verdict(self) -> float:
         """How quickly conclusions settled, on average."""
         if not self.outcomes:
             return 0.0
-        return sum(o.steps_to_stable_verdict for o in self.outcomes) / len(self.outcomes)
+        return sum(o.assessments_to_stable_verdict for o in self.outcomes) / len(self.outcomes)
 
     def mean_verdict_changes(self) -> float:
         """How much the conclusion moved before settling."""

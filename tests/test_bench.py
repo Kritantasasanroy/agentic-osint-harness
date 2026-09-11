@@ -257,7 +257,7 @@ class TestInvestigator:
             run_id="run-2", subject=Company(name="Beta Ltd"), memory_mode=MemoryMode.LONG
         )
 
-        assert second.source_grades["reuters.com"] is SourceReliability.COMPLETELY_RELIABLE
+        assert second.reliability_of("reuters.com") is SourceReliability.COMPLETELY_RELIABLE
 
     def test_the_wired_machine_covers_every_non_terminal_phase(self) -> None:
         machine = Fixtures.investigator(Fixtures.model()).machine()

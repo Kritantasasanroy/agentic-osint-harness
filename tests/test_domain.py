@@ -43,13 +43,6 @@ class TestAdmiraltyGrading:
         assert 0.0 < SourceReliability.CANNOT_BE_JUDGED.weight() < 0.2
         assert 0.0 < InformationCredibility.CANNOT_BE_JUDGED.weight() < 0.2
 
-    def test_only_the_top_two_grades_carry_a_finding_alone(self) -> None:
-        carrying = [grade for grade in SourceReliability if grade.carries_a_finding_alone()]
-        assert carrying == [
-            SourceReliability.COMPLETELY_RELIABLE,
-            SourceReliability.USUALLY_RELIABLE,
-        ]
-
 
 class TestConfidenceBand:
     def test_every_band_range_is_ordered_and_within_the_unit_interval(self) -> None:
@@ -144,10 +137,6 @@ class TestAssessment:
         assert hedged.brier_score(was_correct=True) == pytest.approx(0.25)
         assert hedged.brier_score(was_correct=False) == pytest.approx(0.25)
 
-    def test_insufficient_evidence_is_not_a_conclusive_judgment(self) -> None:
-        assert not Judgment.INSUFFICIENT_EVIDENCE.is_conclusive()
-        assert Judgment.SUPPORTED.is_conclusive()
-
 
 class TestSubjectPolymorphism:
     def test_each_subject_kind_opens_with_at_least_two_competing_hypotheses(self) -> None:
@@ -178,9 +167,11 @@ class TestInvestigation:
         )
 
     def _record(self, investigation: Investigation, url: str, assertion: str) -> str:
-        investigation.record_document(
-            Document.retrieved(url=url, title="t", text="body"),
+        investigation.record_document(Document.retrieved(url=url, title="t", text="body"))
+        investigation.grade_source(
+            Document.retrieved(url=url, title="t", text="b").source_domain,
             SourceReliability.USUALLY_RELIABLE,
+            "wire service",
         )
         return investigation.record_evidence(
             Evidence(
@@ -236,7 +227,7 @@ class TestInvestigation:
             investigation.assess(
                 Assessment(judgment=judgment, leading_hypothesis="h", probability=0.6)
             )
-        assert investigation.steps_to_stable_verdict() == 3
+        assert investigation.assessments_to_stable_verdict() == 3
 
     def test_high_priority_open_leads_block_a_conclusion(self) -> None:
         investigation = self._open()

@@ -72,7 +72,8 @@ class Scenario:
         document = Document.retrieved(
             url=url, title="t", text="body", retrieved_at=datetime(2026, 1, 1, tzinfo=UTC)
         )
-        investigation.record_document(document, grade)
+        investigation.record_document(document)
+        investigation.grade_source(document.source_domain, grade, "graded for this scenario")
         return investigation.record_evidence(
             Evidence(
                 assertion=assertion,
