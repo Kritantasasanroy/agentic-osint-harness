@@ -251,7 +251,20 @@ assessment series, the Admiralty grading *reason* generated and then thrown away
 half of the report carrying no grounding check. Every one is fixed, each with a regression test in
 [`tests/test_regressions.py`](tests/test_regressions.py) that names the defect it prevents.
 
-Those findings are recorded here rather than quietly repaired because the process working is the
-more useful thing to show. A separate adversarial pass also broke an earlier version of the
-memory-citation guarantee in §5, which is why it now rests on a validator rather than on the shape
-of the archive.
+The gate then failed **twice more**, and both rounds are worth recording.
+
+The second round caught me removing the render-time citation check — I had accepted a static claim
+that it was redundant without testing it, and an auditor broke it in three lines, because pydantic
+does not revalidate on mutation into a held dict. The third caught a bug I had introduced *with my
+own fix*: gating hypotheses by memory mode meant one could never be examined, and since ACH ranks by
+least-disconfirmed, an unexamined hypothesis scoring zero beat every hypothesis actually tested. A
+guess nobody checked would have led the report. That one is fixed at the root — scoring zero by
+never being examined is not the same as surviving examination — and untested hypotheses are now
+shown and marked rather than hidden.
+
+Those rounds are recorded rather than quietly repaired because they are the most useful evidence
+here. Three things this process demonstrated that a clean run could not: a per-slice review cannot
+see a property violated only by the interaction between slices; a test that asserts on an
+intermediate will pass while the property it names is false; and a fix is a change like any other,
+so it needs auditing too. I was wrong about the citation guarantee twice, and both corrections are
+in the code with a test naming the defect.

@@ -119,9 +119,28 @@ labelled a step count, the Admiralty grading *reason* being generated and then d
 narrative half of the report carrying no grounding check at all.
 
 All are fixed, each with a regression test naming the defect. `ablate` now produces byte-identical
-output across invocations, verified. The lesson generalises: slice-local review cannot see a
-property that is only violated by the interaction between slices, and a test that asserts on an
-intermediate rather than on the real output will pass while the property it names is false.
+output across invocations, verified.
+
+**The gate then failed twice more, on the fixes themselves.** Round two caught me having *removed*
+the render-time citation check: I had accepted a static claim that it duplicated the constructor
+validator, without testing the claim. An auditor broke it in three lines — pydantic does not
+revalidate on mutation into a held dict, so a forged citation still rendered clean. Round three
+caught a defect I introduced with my own remediation: gating hypotheses by memory mode meant a
+Reflection-added hypothesis could never be judged, so it held a disconfirming score of zero, and
+under least-disconfirmed-wins that beat every hypothesis actually examined. An unexamined guess
+would have been reported as the leading explanation.
+
+Four lessons generalise beyond this project:
+
+1. **Slice-local review cannot see a property violated only by the interaction between slices.** The
+   `none` leak needed two phases and a helper to exist simultaneously; no single slice contained it.
+2. **A test asserting on an intermediate passes while the property it names is false.** The memory
+   test checked `Briefing.header()`, which was correctly gated, and so never noticed that the phases
+   bypassed it. It now asserts on the prompt actually sent.
+3. **A demonstrated break outranks a static claim of redundancy.** Two auditors disagreed about the
+   renderer check; the one with a working exploit was right, and I sided with the other.
+4. **Fixes need auditing too.** The worst single defect found anywhere in this project — an untested
+   hypothesis winning by default — was introduced by a fix, not by the original build.
 
 ## 4. Limitations
 
