@@ -1,243 +1,251 @@
-# Report — design choices, findings, limitations
+# Report: design choices, findings, limitations
 
-## 1. The choice that determined everything else
+## 1. The choice that shaped everything else
 
-The brief asks for a findings report "a human analyst would actually trust enough to act on". An
-analyst does not trust a number a language model emitted; they trust a judgment they can audit.
-So the first decision was to stop inventing scoring and borrow the domain from the field that has
-already solved this: intelligence analysis.
+The brief asks for a findings report "a human analyst would actually trust enough to act on." An
+analyst doesn't trust a number some language model happened to emit. They trust a judgment they can
+audit themselves. So my first real decision was to stop inventing scoring from scratch and borrow the
+domain from a field that already solved this problem: intelligence analysis.
 
-Three instruments, each external to this codebase and checkable against a published standard:
+Three instruments, each one external to this codebase and checkable against a published standard:
 
-- **Admiralty (NATO) grading** splits reliability of the *publisher* (`A-F`) from credibility of the
-  *claim* (`1-6`). They are graded by different criteria and conflating them is the standard misuse,
-  so they live on different objects and cannot be accidentally merged.
-- **Analysis of Competing Hypotheses** ranks explanations by least *disconfirmed*. This inverts the
-  usual failure: evidence consistent with five hypotheses is weak, evidence that eliminates one is
-  strong. Confirmation bias is designed out rather than warned against.
-- **ICD 203 estimative probability** makes confidence a named band with a numeric range, which is
-  what makes it Brier-scorable at all.
+- **Admiralty (NATO) grading** splits reliability of the *publisher* (A through F) from credibility of
+  the *claim* (1 through 6). They're graded on different criteria, and conflating them is the standard
+  way people misuse this scale, so I kept them on different objects. They can't get merged by accident.
+- **Analysis of Competing Hypotheses** ranks explanations by least *disconfirmed*. This flips the usual
+  failure mode on its head: evidence consistent with five hypotheses is weak evidence, evidence that
+  eliminates one is strong. Confirmation bias gets designed out here, not just warned against.
+- **ICD 203 estimative probability** turns confidence into a named band with a numeric range attached,
+  which is the only reason it can be Brier-scored at all.
 
-The consequence worth noting: this unified all three subject kinds into **one** mechanism. A company,
-a person and a claim are all "a set of competing hypotheses resolved by ACH". Subject kind chooses
-the opening questions and nothing else, so there is no conditional chain branching on type anywhere
-in the agent.
+One thing this bought me for free: all three subject kinds collapse into one mechanism. A company, a
+person, and a claim all boil down to "a set of competing hypotheses, resolved by ACH." The subject
+kind only picks the opening questions. Nothing else. There's no conditional chain branching on type
+anywhere in the agent.
 
-## 2. Design choices and rationale
+## 2. Design choices and why I made them
 
-### Owning the state machine
+### Owning the state machine myself
 
-About a hundred lines, hand-written. The brief asked for an explicit graph, and every metric it
-wants is a hook on the loop — one `Step` per transition carrying phase, reason, tool calls, tokens
-and latency. A framework would have meant instrumenting someone else's abstraction to recover
-numbers this exposes for free.
+About a hundred lines, hand-written, nothing fancy. The brief asked for an explicit graph, and every
+metric it wants turns out to be a hook on that loop: one `Step` per transition, carrying the phase, the
+reason it moved, the tool calls, the tokens, the latency. If I'd reached for a framework instead, I'd
+have spent my time instrumenting somebody else's abstraction just to recover numbers this version
+gives me for free.
 
-### Cassettes as an integrity mechanism
+### Cassettes as an integrity mechanism, not a speed trick
 
-The obvious reading of record/replay is "makes tests fast". That is not why it is here. The memory
-ablation compares three arms; unless all three see identical retrieval, any difference between them
-is partly the web changing between runs. Replay is therefore the **default**, and a cassette miss
-raises rather than falling through to the network, because a silent live call would quietly destroy
-the guarantee.
+The obvious read on record and replay is "it makes tests fast." That's not why it's here. The memory
+ablation compares three arms, and unless all three see identical retrieval, any difference between
+them is partly just the web changing between runs. So replay is the default. A cassette miss raises an
+error instead of quietly falling through to the network, because a silent live call would wreck the
+one guarantee this whole layer exists to give.
 
-The side effect is that the whole benchmark runs with no API key, which is why a reviewer can
-execute it before reading any of this.
+Side effect worth having: the whole benchmark runs with no API key, which is why anyone reviewing this
+can run it before reading a word of this document.
 
 ### Deliberately imperfect memory retrieval
 
-Recall is lexical, not embedding-based. This looks like a shortcut and is not: a retriever that
-never confuses two people sharing a name would make the harmful-retrieval metric unmeasurable, and
-same-name confusion is *the* canonical memory failure in OSINT. The weakness is the experiment. The
-measured ablation confirms it — interference appears only in `long` mode, on similarly-named
-subjects, and is attributed automatically because a `Recollection` carries the episode it came from.
+Recall here is lexical, not embedding-based. Looks like a shortcut. Isn't one. A retriever smart enough
+to never confuse two people sharing a name would make the harmful-retrieval metric impossible to
+measure, and same-name confusion happens to be the canonical way memory fails in real OSINT work. The
+weakness is the experiment. The measured ablation backs this up: interference shows up only in `long`
+mode, on similarly named subjects, and gets attributed automatically because a `Recollection` always
+carries the episode it came from.
 
-### Two guarantees made structural rather than procedural
+### Two guarantees I made structural instead of procedural
 
-Both of these could have been prompt instructions. Prompt instructions are not guarantees.
+Both of these could have just been prompt instructions. Prompt instructions aren't guarantees, though,
+they're requests.
 
-1. **Memory can never be cited.** The archive stores conclusions and holds no document and no URL,
-   but that alone proved insufficient: an independent auditor assembled an `Investigation` outside
-   the guarded path and rendered a clean-looking forged citation. The guarantee now rests on
-   `Evidence` having one construction site behind `record_evidence`, plus a validator that refuses
-   to construct or reload a record holding an unbacked citation.
-2. **Ground truth cannot reach a prompt.** The investigator's signature accepts a `Subject`; nothing
-   accepts a `BenchmarkCase`. The object holding the answer never crosses the boundary.
+1. **Memory can never get cited.** The archive stores conclusions and holds no document, no URL,
+   nothing citable, but that alone turned out not to be enough. An independent auditor assembled an
+   `Investigation` outside the guarded path and rendered a clean-looking forged citation with it. So
+   now the guarantee rests on `Evidence` having exactly one construction site behind
+   `record_evidence`, plus a validator that refuses to build or reload any record holding an unbacked
+   citation.
+2. **Ground truth can never reach a prompt.** The investigator's signature accepts a `Subject`.
+   Nothing accepts a `BenchmarkCase`. The object holding the actual answer never crosses that boundary
+   at all.
 
-### Scoring that cannot be gamed or quietly moved
+### Scoring that can't be gamed or quietly shifted
 
-Reward is decomposed (correctness 0.40, calibration 0.25, evidence quality 0.20, citation integrity
-0.15, minus a capped efficiency penalty), computed **after** the episode from the stored trajectory,
-and version-stamped. Nothing the agent can reach imports the scoring code.
+Reward is decomposed: correctness at 0.40, calibration at 0.25, evidence quality at 0.20, citation
+integrity at 0.15, minus a capped efficiency penalty. Computed after the episode, from the stored
+trajectory, version-stamped. Nothing the agent can reach ever imports the scoring code.
 
-Two specific decisions inside that:
+Two decisions worth calling out inside that:
 
-- **Calibration is half Brier, half defensible-band membership.** Brier alone is minimised by
-  hedging every answer to even odds, which is precisely the behaviour an investigator must not be
-  rewarded for. The band term punishes hedging and overclaiming alike.
-- **Abstention scores zero on correctness in both directions.** Declining where a verdict was
-  available, and committing where abstention was the only honest answer, both score zero on the
-  correctness component — no partial credit, where a supported/partially-supported miss earns half.
-  Other components still contribute, deliberately: a wrong verdict resting on real, well-graded
-  sources is not the same failure as an invented one.
+- **Calibration is half Brier score, half defensible-band membership.** Brier alone gets minimised by
+  hedging every answer to even odds, which is exactly the behaviour an investigator should never get
+  rewarded for. The band term punishes hedging and overclaiming both.
+- **Abstention scores zero on correctness in either direction.** Declining when a verdict was actually
+  available, and committing when abstention was the only honest answer, both score zero on
+  correctness. No partial credit, while a supported-versus-partially-supported miss still earns half.
+  The other components still contribute, and that's deliberate: a wrong verdict resting on real,
+  well-graded sources is not the same failure as one built on invented sources.
 
 ### No fallback routing across models
 
-OpenRouter can silently re-route a failed or declined request to a different model behind the same
-call. That is switched off here: for a product that trade is sensible, but for a benchmark it is
-corrupting, because it silently places episodes produced by two different models into one
-comparison. A failure raises, gets tagged, and stays in the denominator.
+OpenRouter can quietly re-route a failed or declined request to a different model behind the same
+call. I switched that off. For a product, that tradeoff is sensible. For a benchmark, it's corrupting,
+because it silently mixes episodes from two different models into one comparison. A failure just
+raises, gets tagged, and stays in the denominator instead of vanishing.
 
-### OpenRouter, a specific free model, and what running it live actually taught
+### OpenRouter, one specific free model, and what running it live actually taught me
 
-`ModelClient` needs exactly one thing from a provider — turn a prompt into valid structured JSON —
-so the harness runs on OpenRouter rather than a single vendor's API, which makes the provider a
-one-line swap and gives access to models priced at zero. That comes with a real constraint: the free
-tier is rate-limited rather than metered (20 requests/minute; 50/day with no credits ever purchased,
-1,000/day past a one-time $10 minimum), governed per account rather than per key. `LiveModel` paces
-calls to respect the per-minute ceiling; the daily ceiling cannot be lifted from inside the harness,
-which is why the live results below are a deliberately bounded run rather than the full sweep.
+`ModelClient` needs exactly one thing from a provider: turn a prompt into valid structured JSON.
+Nothing else. So the harness runs on OpenRouter rather than a single vendor's API, which makes the
+provider a one-line swap and opens up models priced at zero. That comes with a real catch: the free
+tier is rate-limited, not metered (20 requests a minute, 50 a day with no credits ever purchased,
+1,000 a day past a one-time $10 minimum), governed per account rather than per key. `LiveModel` paces
+calls to respect the per-minute ceiling. The daily ceiling can't be lifted from inside the harness at
+all, which is exactly why the live results below are a deliberately bounded run, not the full sweep.
 
-The specific model (`nex-agi/nex-n2.5-pro:free`, overridable via `--model`) was picked by checking
-OpenRouter's own model catalogue directly — the research for this turned up a wall of confident-
-sounding blog rankings naming models that do not otherwise appear in that catalogue at all, which is
-its own small lesson about trusting secondary sources for anything time-sensitive. OpenRouter states
-its own free lineup rotates without notice, which is why the model id is a parameter, not a literal.
+I picked the specific model (`nex-agi/nex-n2.5-pro:free`, overridable through `--model`) by checking
+OpenRouter's own catalogue directly. Good call, too: the research for this turned up a wall of
+confident-sounding blog rankings naming models that don't even appear in that catalogue at all. A
+small lesson of its own about trusting secondary sources for anything that changes fast. OpenRouter
+says plainly that its free lineup rotates without notice, which is exactly why the model id is a
+parameter, never a literal.
 
-Running it live surfaced something no offline test could: this model spends the large majority of
-its token budget on hidden chain-of-thought before writing an answer (measured: 319 of 397
-completion tokens on a plain prompt). An unremarkable prompt exhausted the token ceiling on
-reasoning alone, before any JSON was ever written — invisible to `RehearsedModel`/`ScriptedModel`,
-neither of which reasons at all. The fix was two changes with no monetary cost on a $0 model: cap
-reasoning effort, and raise the output ceiling generously since extra tokens only cost wall-clock
-time. The failure is now diagnosed by name rather than reported as a bare, uninformative silence.
+Running it live surfaced something no offline test ever could. This model spends the large majority
+of its token budget on hidden chain-of-thought before it writes an answer (I measured 319 of 397
+completion tokens burned on a plain prompt). An unremarkable prompt exhausted the token ceiling on
+reasoning alone, before a single character of JSON got written. Invisible to `RehearsedModel` and
+`ScriptedModel`, since neither one reasons at all. The fix was two changes, and neither cost a cent on
+a $0 model: cap reasoning effort, and raise the output ceiling generously, since extra tokens only cost
+wall-clock time. The failure is now diagnosed by name instead of reported as a bare, useless silence.
 
-### Search became a `Tool`, not a model capability
+### Search became a real tool, not a model capability
 
-No provider offers server-side search for free, so search moved out of `ModelClient` entirely and
-became `WebSearch`, a `Tool` beside `Encyclopedia` and `PageFetch`, using DuckDuckGo's keyless HTML
-front end. This is a strict improvement on the design it replaced, not a workaround forced by the
-provider swap: because search is now a `Tool`, it is cassette-recorded and replayable offline like
-every other retrieval, which the previous model-driven search never was — that one was either a
-live provider call or a scripted stand-in, with nothing in between. `ModelClient` is left with
-exactly one method, which is a more honest statement of what a reasoning provider actually owes
-this harness. The scraping approach is fragile to markup changes by construction, marked with the
-project's own `ponytail:` convention naming the ceiling and the upgrade path.
+No provider offers server-side search for free. So search moved out of `ModelClient` entirely and
+became `WebSearch`, a `Tool` sitting beside `Encyclopedia` and `PageFetch`, using DuckDuckGo's keyless
+HTML front end. This turned out to be a genuine improvement on the design it replaced, not a
+workaround forced by the provider swap. Because search is a `Tool` now, it's cassette-recorded and
+replayable offline exactly like every other retrieval, which the old model-driven search never was.
+That version was either a live provider call or a scripted stand-in, nothing in between. `ModelClient`
+is down to exactly one method now, which is a more honest statement of what a reasoning provider
+actually owes this harness. The scraping approach is fragile to markup changes by construction, and I
+marked it that way with this project's own `ponytail:` convention, naming the ceiling and the upgrade
+path right there in the comment.
 
 ## 3. Key findings
 
-**The instrumentation detects what it was built to detect.** Across 42 episodes (14 cases x 3 memory
-modes) replayed from an identical cassette, `long` mode shows a 14% harmful-retrieval rate and two
-memory-interference failures; `none` and `short` show zero. Since retrieval was byte-identical
-across arms, that difference is attributable to memory rather than to the environment — which is the
-entire point of building the cassette layer first.
+**The instrumentation detects exactly what it was built to detect.** Across 42 episodes (14 cases
+times 3 memory modes), all replayed from an identical cassette, `long` mode shows a 14% harmful-
+retrieval rate and two memory-interference failures. `none` and `short` show zero. Since retrieval was
+byte-identical across every arm, that difference is attributable to memory and nothing else. Which is
+the entire point of building the cassette layer first, before anything else.
 
-**Failure attribution is informative rather than decorative.** The dominant tag in the shipped run is
-`source_selection` (11 of 14 in `none`/`short`), correctly identifying that every investigation
-rested on a single publisher. That is a true statement about the run and exactly the kind of finding
-a scalar reward would have hidden.
+**Failure attribution is informative, not decorative.** The dominant tag in the shipped run is
+`source_selection` (11 of 14 in both `none` and `short`), correctly flagging that every investigation
+rested on a single publisher. A true statement about the run, and exactly the kind of finding a plain
+scalar reward would have buried.
 
-**Abstention being a first-class verdict changes the benchmark's shape.** Three of fourteen cases
-have abstention as the *correct* answer, and one (Michael Jordan the researcher) is specifically
-designed so that abstention is *wrong* despite a famous namesake making it tempting. Without the
-floor cases, an agent that abstains on everything would look cautious rather than useless.
+**Making abstention a first-class verdict changes the shape of the whole benchmark.** Three of
+fourteen cases have abstention as the *correct* answer, and one, Michael Jordan the researcher, is
+built specifically so abstaining is *wrong* despite a famous namesake making it tempting. Without
+those floor cases, an agent that abstains on everything would look cautious instead of useless.
 
-**Per-slice review was not enough, and the final audit proved it.** Eight slice-by-slice audits all
-returned clean. A final independent audit over the whole codebase then returned **violations**, and
-the most serious was invisible to every earlier round: `Reconciliation` and `Dissemination` read the
-evidence through accessors that bypassed the memory gate, so the `none` control arm leaked the very
-state it is defined by withholding. It survived because the test asserted on the briefing header
-rather than on the prompt actually sent to the model.
+**Per-slice review wasn't enough, and the final audit proved it.** Eight slice-by-slice audits all
+came back clean. Then one final independent audit over the whole codebase came back with violations,
+and the worst one was invisible to every round before it: `Reconciliation` and `Dissemination` were
+reading evidence through accessors that bypassed the memory gate, so the `none` control arm was
+leaking exactly the state it's supposed to be defined by withholding. It survived because the test
+asserted on the briefing header instead of the prompt actually sent to the model.
 
-The same audit found that long-term memory persisted between invocations, so the harmful-retrieval
-rate moved from 14% to 29% on a second run of the same command — the headline number was an artefact
-of how many times it had been run. It also found a metric indexing the assessment series while being
-labelled a step count, the Admiralty grading *reason* being generated and then discarded, and the
-narrative half of the report carrying no grounding check at all.
+That same audit found long-term memory persisting between separate invocations, so the harmful-
+retrieval rate moved from 14% to 29% on a second run of the identical command. The headline number was
+really just an artifact of how many times the thing had been run. It also found a metric indexing the
+assessment series while labelled as a step count, the Admiralty grading's *reason* field generated and
+then thrown away, and the narrative half of the report carrying no grounding check at all.
 
-All are fixed, each with a regression test naming the defect. `ablate` now produces byte-identical
-output across invocations, verified.
+Every one of those is fixed now, each with a regression test naming the exact defect. `ablate`
+produces byte-identical output across repeated invocations, and I verified that directly.
 
-**The gate then failed twice more, on the fixes themselves.** Round two caught me having *removed*
-the render-time citation check: I had accepted a static claim that it duplicated the constructor
-validator, without testing the claim. An auditor broke it in three lines — pydantic does not
-revalidate on mutation into a held dict, so a forged citation still rendered clean. Round three
-caught a defect I introduced with my own remediation: gating hypotheses by memory mode meant a
-Reflection-added hypothesis could never be judged, so it held a disconfirming score of zero, and
-under least-disconfirmed-wins that beat every hypothesis actually examined. An unexamined guess
-would have been reported as the leading explanation.
+**The gate then failed two more times, on the fixes themselves.** Round two caught me having removed
+the render-time citation check. I'd accepted a static claim that it duplicated the constructor
+validator, without ever testing that claim myself. An auditor broke it in three lines: pydantic simply
+doesn't revalidate on mutation into a held dict, so a forged citation still rendered clean. Round three
+caught a defect I'd introduced with my own fix from round two: gating hypotheses by memory mode meant
+a Reflection-added hypothesis could never actually be judged, so it carried a disconfirming score of
+zero, and under least-disconfirmed-wins, that beat every hypothesis that was genuinely examined. An
+unexamined guess would have been reported as the leading explanation, and nobody would have known why.
 
-Four lessons generalise beyond this project:
+Four lessons here generalise well beyond this one project:
 
-1. **Slice-local review cannot see a property violated only by the interaction between slices.** The
-   `none` leak needed two phases and a helper to exist simultaneously; no single slice contained it.
-2. **A test asserting on an intermediate passes while the property it names is false.** The memory
-   test checked `Briefing.header()`, which was correctly gated, and so never noticed that the phases
-   bypassed it. It now asserts on the prompt actually sent.
+1. **Slice-local review can't see a property that only breaks from the interaction between slices.**
+   The `none` leak needed two separate phases and a shared helper to exist at once. No single slice
+   contained it on its own.
+2. **A test that asserts on an intermediate value passes while the real property is already false.**
+   The memory test checked `Briefing.header()`, which was correctly gated, so it never once noticed
+   that the phases themselves were bypassing it. It now asserts on the actual prompt sent.
 3. **A demonstrated break outranks a static claim of redundancy.** Two auditors disagreed about the
-   renderer check; the one with a working exploit was right, and I sided with the other.
-4. **Fixes need auditing too.** The worst single defect found anywhere in this project — an untested
-   hypothesis winning by default — was introduced by a fix, not by the original build.
+   renderer check. The one holding a working exploit was right, and I'd sided with the other one.
+4. **Fixes need auditing too.** The single worst defect found anywhere in this project, an untested
+   hypothesis winning by default, was introduced by a fix. Not by the original build.
 
 ## 4. Limitations
 
-**The shipped benchmark numbers still come from the non-reasoning stand-in, deliberately.** The
-free tier's daily request cap (50/day with no credits ever purchased) cannot support a 42-episode
-live sweep in one sitting, so the reproducible submission artifact remains the rehearsed analyst,
-which retrieves real documents and produces real citations but does no analysis — it abstains
-everywhere and scores 21%, correct only on the three abstention cases. These numbers validate the
-harness, not the agent, and should not be read as agent quality.
+**The shipped benchmark numbers still come from the non-reasoning stand-in, on purpose.** The free
+tier's daily cap (50 calls a day, no credits purchased) can't support a 42-episode live sweep in one
+sitting, so the reproducible submission artifact stays the rehearsed analyst: real documents, real
+citations, zero actual analysis. It abstains everywhere and scores 21%, correct only on the three
+abstention cases. These numbers validate the harness. They say nothing about agent quality, and
+shouldn't be read that way.
 
-**The live path itself, however, is now verified — not simulated.** A real `--live --record` run
-completed Direction, Collection, Appraisal, Reconciliation and Reflection in full against a real
-free model — Reflection judged the evidence incomplete and looped back into a second Collection
-round, producing 18 genuinely graded assertions, 72 real ACH judgments, and a substantive
-`supported` verdict with specific, evidence-citing reasoning along the way — before that sixth call
-exceeded the token ceiling and the crash-tolerant halt caught it cleanly. The transcript is kept at
-`docs/example-live-run/`. What remains unverified is a *complete, uninterrupted* multi-phase episode
-reaching Dissemination, and the full 42-episode sweep — both blocked by the same daily quota, not by
-anything the design leaves untested.
+**The live path itself, though, is verified now. Not simulated.** A real `--live --record` run
+completed Direction, Collection, Appraisal, Reconciliation, and Reflection in full, against a real
+free model. Reflection judged the evidence incomplete and looped back into a second round of
+Collection, producing 18 genuinely graded assertions, 72 real ACH judgments, and a substantive
+`supported` verdict with specific, evidence-citing reasoning along the way, before that sixth call
+exceeded the token ceiling and the crash-tolerant halt caught it cleanly. I kept the transcript at
+`docs/example-live-run/`. What's still unverified is a complete, uninterrupted multi-phase episode
+that actually reaches Dissemination, and the full 42-episode sweep. Both blocked by the same daily
+quota, not by anything the design leaves untested.
 
-**Running it live found a real bug no mock could have.** Appraisal's source gradings were genuine
-and well-reasoned but kept vanishing from the report, because the model wrote the domain field as a
-hostname plus a description, and evidence is keyed by the bare hostname alone. Fixed at the point of
-use, with a regression test — see decision #10 for the full account. This is the clearest evidence
-in the whole project that live verification finds a different class of defect than review does:
-`ScriptedModel` and `RehearsedModel` cannot write free text into a structured field, so neither one
-could have produced this failure, however carefully either was reviewed.
+**Running it live found a real bug no mock ever could have.** Appraisal's source gradings were genuine
+and well-reasoned, but kept vanishing from the report, because the model wrote the domain field as a
+hostname plus a description, and evidence gets keyed by the bare hostname alone. Fixed at the point of
+use, with a regression test behind it, see decision #10 above for the full story. This is the clearest
+evidence in the whole project that live verification catches a different class of defect than review
+does: `ScriptedModel` and `RehearsedModel` simply cannot write free text into a structured field, so
+neither one could ever have produced this failure, no matter how carefully either was reviewed.
 
-**Reward weights are argued, not derived.** 0.40/0.25/0.20/0.15 expresses a defensible position
-about what matters, but no sensitivity analysis has been run. A different reviewer could argue for
-different weights, and the harness does not currently show how conclusions change under them.
+**Reward weights are argued, not derived.** 0.40 / 0.25 / 0.20 / 0.15 is a defensible position about
+what matters most, but I haven't run a sensitivity analysis on it. A different reviewer could easily
+argue for different weights, and right now the harness doesn't show how conclusions shift under them.
 
-**One real source in the offline cassette.** The recorded retrievals are Wikipedia only, because it
-needs no key. Source-diversity scores in the shipped run are therefore structurally capped at one,
-which is why `source_selection` dominates the failure counts. A live recording pass with web search
-fixes this.
+**Only one real source in the offline cassette.** The recorded retrievals are Wikipedia only, since it
+needs no key. Source-diversity scores in the shipped run are structurally capped at one because of
+this, which is exactly why `source_selection` dominates the failure counts. A live recording pass with
+real web search fixes this.
 
-**The benchmark is small and English-language.** Fourteen cases is enough to exercise every trap once
-but not enough for statistical confidence in any single rate. Non-English sources, jurisdictional
-records, and beneficial-ownership chains are untested.
+**The benchmark is small, and English-only.** Fourteen cases is enough to exercise every trap once,
+but not enough for real statistical confidence in any single rate. Non-English sources, jurisdictional
+records, beneficial-ownership chains: all untested.
 
-**Convergence is barely exercised.** Because the stand-in analyst reaches the same verdict every
-time, verdict-change and assessments-to-stable-verdict are all zero in the shipped run. The metrics
-are implemented and tested, but the shipped data cannot demonstrate them. Note the rename: an
-independent audit found this metric was indexing the assessment series while being labelled and
-reported as a step count, so a six-step episode read as "settling at step 0".
+**Convergence is barely exercised.** Since the stand-in analyst reaches the same verdict every time,
+verdict-change and assessments-to-stable-verdict both sit at zero in the shipped run. The metrics
+themselves are implemented and tested, the shipped data just can't demonstrate them. One small thing
+did get caught here: an independent audit found this metric was indexing the assessment series while
+labelled and reported as a step count, so a six-step episode was reading as "settling at step 0",
+which was just wrong.
 
-## 5. What I would do next, in order
+## 5. What I'd do next, in order
 
-1. **Clear the daily quota over several days, or fund the account past the $10 threshold**, and run
-   the full 42-episode live ablation. The live path is proven to work end to end; what is missing is
-   volume, not verification. At 1,000 requests/day past $10 in lifetime credits, a full sweep
-   becomes a same-day proposition rather than a multi-day one.
-2. **Add a second and third real source type** so source diversity can exceed one and the
-   `source_selection` failure stops dominating: a company registry and a news archive.
-3. **Run the reward weights as a sensitivity sweep** rather than asserting them, and report which
-   conclusions are stable across weightings and which are artefacts of the choice.
-4. **Repeat each case several times** to separate model variance from genuine memory effects. The
-   current design makes this cheap — the cassette holds retrieval fixed, so only sampling varies.
-5. **Grow the archive deliberately** to test memory at a scale where interference becomes likelier,
-   and measure whether the harmful-retrieval rate rises with archive size as it should.
+1. **Clear the daily quota over a few days, or fund the account past the $10 mark**, and run the full
+   42-episode live ablation. The live path already proved it works end to end. What's missing is
+   volume, not verification. At 1,000 requests a day past $10 in lifetime credits, a full sweep turns
+   into a same-day thing instead of a multi-day one.
+2. **Add a second and third real source type** so source diversity can climb past one and
+   `source_selection` stops dominating everything: a company registry, and a news archive.
+3. **Run the reward weights as an actual sensitivity sweep** instead of just asserting them, and report
+   which conclusions hold steady across weightings and which ones are just artifacts of the choice.
+4. **Repeat each case a few times** to separate model variance from genuine memory effects. This design
+   makes that cheap already, since the cassette holds retrieval fixed and only sampling varies.
+5. **Grow the archive on purpose** to test memory at a scale where interference gets more likely, and
+   check whether the harmful-retrieval rate actually rises with archive size the way it should.
 6. **Add an adversarial case class**: a subject whose public record is deliberately contradictory
-   across sources of different reliability, to exercise the conflict path harder than the current
-   cases do.
+   across sources of different reliability, to push the conflict path harder than the current cases do.

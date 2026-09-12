@@ -1,4 +1,4 @@
-# Engineering Guidelines — OSINT Agentic Harness
+# Engineering Guidelines: OSINT Agentic Harness
 
 This file is the working standard for this repository. It is read before every slice of work, and
 anything it forbids is forbidden regardless of how convenient the exception looks at the time.
@@ -8,18 +8,18 @@ project), the **build sequence** (the order work happens in), and the **code sta
 
 Precedence: this file is authoritative for project-specific decisions. Where it is silent, the
 `better-coding` Law applies. Where the two would genuinely conflict, surface it rather than picking
-one — as of this writing there is no known conflict, because this file was derived from that Law.
+one, as of this writing there is no known conflict, because this file was derived from that Law.
 
 ---
 
-## Part 1 — Strictly avoid
+## Part 1: Strictly avoid
 
 These are ranked by how badly they damage the deliverable, not by how hard they are to avoid. The
 first group is what makes an investigation report worthless; the second is what makes a metrics
 study worthless. Both are worse than any code-quality problem, because a reviewer can see bad code
 and correct for it, and cannot see a rigged evaluation at all.
 
-### 1.1 Research integrity — the report must be trustworthy
+### 1.1 Research integrity: the report must be trustworthy
 
 **Never let the model's own recall become evidence.** Every claim in a findings report traces to a
 document that was actually retrieved during that episode, with a URL that appears in that episode's
@@ -49,17 +49,17 @@ bare `0.7` that came out of a language model is not an assessment, it is a decor
 probability range attached, and it is scored for calibration after the fact. "High confidence" with
 no number behind it cannot be evaluated and therefore will not be believed.
 
-### 1.2 Evaluation integrity — the metrics must mean something
+### 1.2 Evaluation integrity: the metrics must mean something
 
 **Never leak ground truth into the agent's context.** The expected answer on a benchmark case must
 never reach a prompt, a tool result, a memory record, or a log the agent reads back. Pass the agent
-a `Subject`, never a `BenchmarkCase`. This leak is easy to introduce by accident — passing a whole
-case object one level too deep — and it invalidates every number downstream of it without producing
+a `Subject`, never a `BenchmarkCase`. This leak is easy to introduce by accident, passing a whole
+case object one level too deep, and it invalidates every number downstream of it without producing
 any visible symptom.
 
 **Never change the reward function after seeing results.** The reward definition is written down,
 version-stamped, and frozen before the benchmark runs. If it must change, the version is bumped and
-every previously reported number is regenerated or discarded — never mixed. Reporting an improvement
+every previously reported number is regenerated or discarded, never mixed. Reporting an improvement
 produced by moving the scoring goalposts is the evaluation equivalent of falsifying a test result.
 
 **Never compute reward inside the agent loop.** Reward is derived offline, from the persisted
@@ -78,7 +78,7 @@ stored trajectory, it does not go in the report.
 with a failure tag, and it stays in the denominator. Selective exclusion is how a mediocre agent
 comes to look excellent.
 
-### 1.3 Code — the CAPITAL offences
+### 1.3 Code: the CAPITAL offences
 
 Any of these means the slice is stashed and rewritten from the clean base, not patched:
 
@@ -94,7 +94,7 @@ Any of these means the slice is stashed and rewritten from the clean base, not p
 
 - **No new dependency that a few lines of standard library would cover.** Specifically: no
   orchestration framework, and no vector database. The graph engine and the memory retriever are
-  small and hand-written on purpose — both are load-bearing for the metrics, and owning them is
+  small and hand-written on purpose. Both are load-bearing for the metrics, and owning them is
   cheaper than instrumenting somebody else's abstraction.
 - **No abstraction with one implementation.** No interface, factory, or config knob introduced for a
   second case that does not exist yet.
@@ -104,14 +104,14 @@ Any of these means the slice is stashed and rewritten from the clean base, not p
 
 ---
 
-## Part 2 — The build sequence
+## Part 2: The build sequence
 
 Work happens in this order. A step is not started before the one above it is finished and verified.
 
 1. **Charter.** Goal, mode, and acceptance criteria written down and frozen. Criteria must each be
    checkable by running a command.
 2. **Domain model before code.** The objects, their properties and behaviour, their relationships,
-   their states, their invariants, and the resulting API shape — written down and reviewed. Every
+   their states, their invariants, and the resulting API shape, written down and reviewed. Every
    concept marked **general**, **ours**, or **plumbing**, and placed accordingly. A cut pass run
    over the result to delete types that do not earn their place.
 3. **Slice.** One coherent change at a time. Before writing any of it, walk the ladder: does this
@@ -120,7 +120,7 @@ Work happens in this order. A step is not started before the one above it is fin
 4. **Triage.** Mechanical grep pass over the changed files for the known patterns. Free, so it runs
    every slice.
 5. **Independent audit.** A separate reviewer with its own context sees the diff, the Law, and the
-   domain model — never the author's justification for why the code is fine.
+   domain model, never the author's justification for why the code is fine.
 6. **Sentence and remediate.** Every finding fixed, by removing the cause. Silencing the check
    instead is a CAPITAL offence and will be caught on the next slice anyway.
 7. **Verify with real output.** Run the tests, the type checker, the linter, and the actual command.
@@ -134,7 +134,7 @@ audit clean over that slice's diff, and the progress checkpoint updated.
 
 ---
 
-## Part 3 — Code standard
+## Part 3: Code standard
 
 ### Typing
 - `mypy --strict` is the contract. Full annotations at every boundary.
@@ -151,8 +151,8 @@ audit clean over that slice's diff, and the progress checkpoint updated.
   and type aliases.
 - Classes are nouns; methods are verbs. A class named for what it does (`ProcessEvidence`,
   `GenerateReport`) is a function that has not admitted it, or a noun that was never found.
-- Not everything belongs on the nearest concept. Orchestration — fetching, retrying, logging,
-  calling a vendor — belongs to the caller, not bolted onto a domain object as a method it does not
+- Not everything belongs on the nearest concept. Orchestration (fetching, retrying, logging,
+  calling a vendor) belongs to the caller, not bolted onto a domain object as a method it does not
   own.
 
 ### Branching
@@ -166,13 +166,13 @@ audit clean over that slice's diff, and the progress checkpoint updated.
 - Specific, not redundant. `graded_evidence_for(hypothesis)` over `get_data()`.
 - An adjective bolted onto a noun is usually a state, not a kind. `VerifiedSource` is a `Source`
   with a fact attached.
-- Generic suffixes — `Manager`, `Handler`, `Processor`, `Builder`, `Engine`, `Data`, `Info` — are a
+- Generic suffixes (`Manager`, `Handler`, `Processor`, `Builder`, `Engine`, `Data`, `Info`) are a
   signal that the real concept was never identified. Allowed only for genuine plumbing, deliberately.
 
 ### Comments
 - **No inline `#` comments explaining what the code does.** If a line needs explaining, rewrite the
   line.
-- **A one-line docstring is allowed, and expected, on every public domain type and node class** —
+- **A one-line docstring is allowed, and expected, on every public domain type and node class,**
   and it must be the concept's definition, independent of how this codebase implements it. This is
   the "definition before name" record, so it earns its place; a docstring restating the class name
   does not.
@@ -183,15 +183,15 @@ audit clean over that slice's diff, and the progress checkpoint updated.
 
 ### Tests
 - Test behaviour at the real entry point, against real wiring.
-- **Mock third-party APIs only** — the model provider and the network. Never mock internal services,
+- **Mock third-party APIs only:** the model provider and the network. Never mock internal services,
   domain objects, or our own layers to assert that delegation happened.
 - Every non-trivial branch, scorer, and parser leaves behind one runnable check that fails if the
   logic breaks.
 
 ### Determinism
 - Every run is reproducible from `(case id, memory mode, seed, cassette set)`. Anything that would
-  break that — wall-clock time, unseeded randomness, dict iteration order affecting output, live
-  network in a benchmark path — is a defect.
+  break that (wall-clock time, unseeded randomness, dict iteration order affecting output, live
+  network in a benchmark path) is a defect.
 
 ### Commits
 - `<type>(<scope>): <subject>`, imperative, under 50 characters, no trailing period, and the message
