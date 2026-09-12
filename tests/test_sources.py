@@ -13,11 +13,13 @@ from osint_harness.sources.cassette import (
     RecordedCall,
 )
 from osint_harness.sources.tools import (
+    DuckDuckGoResults,
     Encyclopedia,
     EncyclopediaResponse,
     PageFetch,
     PlainText,
     Tool,
+    WebSearch,
 )
 
 FIXED_TIME = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
@@ -169,6 +171,92 @@ class TestEncyclopediaRetrieval:
         documents = Encyclopedia(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme")
         assert documents[0].url == "https://en.wikipedia.org/wiki/Acme_Corp"
         assert documents[0].source_domain == "en.wikipedia.org"
+
+
+DUCKDUCKGO_SAMPLE = """
+<div class="results">
+  <div class="result web-result">
+    <div class="result__body">
+      <h2 class="result__title">
+        <a rel="nofollow" class="result__a"
+           href="//duckduckgo.com/l/?uddg=https%3A%2F%2Freuters.com%2Facme&amp;rut=abc">
+          Acme files for court protection
+        </a>
+      </h2>
+      <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Freuters.com%2Facme">
+        Acme Corp filed for court protection today.
+      </a>
+    </div>
+  </div>
+  <div class="result web-result">
+    <div class="result__body">
+      <h2 class="result__title">
+        <a rel="nofollow" class="result__a" href="https://ft.com/content/acme-2">
+          Acme raises new funding
+        </a>
+      </h2>
+      <a class="result__snippet" href="https://ft.com/content/acme-2">
+        Acme Corp raised a new funding round.
+      </a>
+    </div>
+  </div>
+</div>
+"""
+
+
+class TestDuckDuckGoResults:
+    def test_parses_title_and_snippet_pairs_in_order(self) -> None:
+        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
+
+        assert len(results) == 2
+        assert results[0][1] == "Acme files for court protection"
+        assert results[0][2] == "Acme Corp filed for court protection today."
+
+    def test_unwraps_the_duckduckgo_redirect_link(self) -> None:
+        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
+
+        assert results[0][0] == "https://reuters.com/acme"
+
+    def test_keeps_an_already_absolute_link_unchanged(self) -> None:
+        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
+
+        assert results[1][0] == "https://ft.com/content/acme-2"
+
+    def test_an_empty_page_yields_no_results(self) -> None:
+        assert DuckDuckGoResults.of("<html><body>no results here</body></html>") == ()
+
+
+class TestWebSearchRetrieval:
+    def test_returns_documents_from_the_parsed_results(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
+        )
+        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+
+        assert documents[0].url == "https://reuters.com/acme"
+        assert documents[0].title == "Acme files for court protection"
+
+    def test_the_document_text_is_the_snippet_not_a_full_page(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
+        )
+        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+
+        assert documents[0].text == "Acme Corp filed for court protection today."
+
+    def test_results_are_capped_at_max_results(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
+        )
+        monkeypatch.setattr(WebSearch, "MAX_RESULTS", 1)
+
+        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+
+        assert len(documents) == 1
 
 
 class TestPageFetchRetrieval:

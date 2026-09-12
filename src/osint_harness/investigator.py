@@ -4,6 +4,7 @@ from osint_harness.domain.investigation import (
     InvestigationPhase,
     MemoryMode,
     Recollection,
+    Step,
 )
 from osint_harness.domain.subject import AnySubject
 from osint_harness.graph.machine import InvestigationGraph, Node
@@ -16,7 +17,7 @@ from osint_harness.graph.phases import (
     Reflection,
 )
 from osint_harness.memory.archive import InvestigationArchive, SourceRegister
-from osint_harness.model.client import ModelClient
+from osint_harness.model.client import ModelClient, ModelRefusedError, ModelUnavailableError, Usage
 from osint_harness.sources.tools import Tool
 
 
@@ -30,15 +31,18 @@ class Investigator:
 
     def __init__(
         self,
+        *,
         model: ModelClient,
         encyclopedia: Tool,
         pages: Tool,
+        web_search: Tool,
         archive: InvestigationArchive,
         register: SourceRegister,
     ) -> None:
         self._model = model
         self._encyclopedia = encyclopedia
         self._pages = pages
+        self._web_search = web_search
         self._archive = archive
         self._register = register
 
@@ -58,10 +62,46 @@ class Investigator:
             recalled_priors=self._priors(subject, memory_mode),
         )
         self._seed_source_grades(investigation)
-        self.machine().run(investigation)
+        try:
+            self.machine().run(investigation)
+        except (ModelUnavailableError, ModelRefusedError) as failure:
+            self._halt_on_failure(investigation, failure)
         self._archive.remember(investigation)
         self._register.learn_from(investigation)
         return investigation
+
+    def _halt_on_failure(
+        self, investigation: Investigation, failure: ModelUnavailableError | ModelRefusedError
+    ) -> None:
+        """Convert a model failure into a visible halt instead of losing the episode outright.
+
+        A crashed episode must stay in the benchmark denominator with a tag, not disappear — the
+        graph engine deliberately does not catch a node's own exception (a bug in a node should
+        never be silently absorbed), so this outer boundary is where a real model/network failure
+        is turned into the same kind of halt budget exhaustion already produces.
+
+        The halting step also claims whatever the failing call itself spent. `LiveModel` charges
+        usage as soon as a response is parsed, before validation can reject malformed or truncated
+        content — a real, billed call that happened to fail is not the same as a free one, and an
+        earlier version of this method left it uncounted by defaulting the step's tokens to zero.
+        """
+        spent = self._model.spent()
+        already_recorded = Usage(
+            input_tokens=sum(step.input_tokens for step in investigation.steps),
+            output_tokens=sum(step.output_tokens for step in investigation.steps),
+        )
+        unattributed = spent.since(already_recorded)
+        investigation.record_step(
+            Step(
+                index=len(investigation.steps),
+                phase=investigation.phase,
+                moved_to=InvestigationPhase.HALTED,
+                reason=f"halted: {failure}",
+                input_tokens=unattributed.input_tokens,
+                output_tokens=unattributed.output_tokens,
+            )
+        )
+        investigation.phase = InvestigationPhase.HALTED
 
     def archive(self) -> InvestigationArchive:
         """The long-term memory this investigator writes to, so a caller can persist it."""
@@ -76,7 +116,7 @@ class Investigator:
         nodes: dict[InvestigationPhase, Node] = {
             InvestigationPhase.DIRECTION: Direction(self._model),
             InvestigationPhase.COLLECTION: Collection(
-                self._model, self._encyclopedia, self._pages
+                self._model, self._encyclopedia, self._pages, self._web_search
             ),
             InvestigationPhase.APPRAISAL: Appraisal(self._model),
             InvestigationPhase.RECONCILIATION: Reconciliation(self._model),

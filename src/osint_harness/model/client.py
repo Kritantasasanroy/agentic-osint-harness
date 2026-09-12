@@ -38,24 +38,14 @@ class Usage(BaseModel):
         )
 
 
-class SearchResult(BaseModel):
-    """One hit from a web search: where it is and what it claims to be, before anything is read."""
-
-    model_config = ConfigDict(frozen=True)
-
-    url: str = Field(min_length=1)
-    title: str = ""
-    snippet: str = ""
-
-
-class SearchFindings(BaseModel):
-    """What a search returned, as candidate places to look rather than as evidence."""
-
-    results: tuple[SearchResult, ...] = ()
-
-
 class ModelClient(ABC):
-    """The reasoning engine behind each phase, and the meter that records what it cost."""
+    """The reasoning engine behind each phase, and the meter that records what it cost.
+
+    Its only responsibility is turning a prompt into a structured decision. Gathering information
+    — search included — is a `Tool`, never a model capability: that keeps every retrieval, search
+    among them, behind the same cassette and the same failure handling, and keeps the harness's
+    ability to look things up independent of which reasoning provider is behind `decide()`.
+    """
 
     def __init__(self) -> None:
         self._spent = Usage()
@@ -72,10 +62,6 @@ class ModelClient(ABC):
     def decide[T: BaseModel](self, purpose: str, system: str, prompt: str, schema: type[T]) -> T:
         """Answer a phase's question in the exact shape that phase requires."""
 
-    @abstractmethod
-    def search(self, query: str) -> SearchFindings:
-        """Find candidate sources for a query. Returns places to look, never findings to cite."""
-
 
 class ScriptedModel(ModelClient):
     """A model whose every answer is fixed in advance, so runs are deterministic and free.
@@ -87,12 +73,10 @@ class ScriptedModel(ModelClient):
     def __init__(
         self,
         decisions: dict[str, BaseModel] | None = None,
-        searches: dict[str, SearchFindings] | None = None,
         cost_per_call: Usage | None = None,
     ) -> None:
         super().__init__()
         self._decisions = dict(decisions) if decisions is not None else {}
-        self._searches = dict(searches) if searches is not None else {}
         self._cost = cost_per_call if cost_per_call is not None else Usage(
             input_tokens=100, output_tokens=50
         )
@@ -102,10 +86,6 @@ class ScriptedModel(ModelClient):
     def script(self, purpose: str, reply: BaseModel) -> None:
         """Fix the answer this model will give for one phase."""
         self._decisions[purpose] = reply
-
-    def script_search(self, query: str, findings: SearchFindings) -> None:
-        """Fix the results this model will return for one search."""
-        self._searches[query] = findings
 
     def decide[T: BaseModel](self, purpose: str, system: str, prompt: str, schema: type[T]) -> T:
         self.purposes_asked.append(purpose)
@@ -120,10 +100,3 @@ class ScriptedModel(ModelClient):
                 f"but {schema.__name__} was required"
             )
         return reply
-
-    def search(self, query: str) -> SearchFindings:
-        self.prompts_seen.append(query)
-        self._charge(self._cost)
-        if query not in self._searches:
-            raise ModelUnavailableError(f"no scripted search for {query!r}")
-        return self._searches[query]

@@ -80,12 +80,48 @@ Two specific decisions inside that:
   Other components still contribute, deliberately: a wrong verdict resting on real, well-graded
   sources is not the same failure as an invented one.
 
-### Refusal fallbacks left off, against the vendor's own advice
+### No fallback routing across models
 
-The provider recommends enabling server-side fallbacks, which re-run a declined request on another
-model. For a product that is sensible; for a benchmark it is corrupting, because it silently places
-episodes produced by two different models into one comparison. Refusals raise, get tagged, and stay
-in the denominator.
+OpenRouter can silently re-route a failed or declined request to a different model behind the same
+call. That is switched off here: for a product that trade is sensible, but for a benchmark it is
+corrupting, because it silently places episodes produced by two different models into one
+comparison. A failure raises, gets tagged, and stays in the denominator.
+
+### OpenRouter, a specific free model, and what running it live actually taught
+
+`ModelClient` needs exactly one thing from a provider — turn a prompt into valid structured JSON —
+so the harness runs on OpenRouter rather than a single vendor's API, which makes the provider a
+one-line swap and gives access to models priced at zero. That comes with a real constraint: the free
+tier is rate-limited rather than metered (20 requests/minute; 50/day with no credits ever purchased,
+1,000/day past a one-time $10 minimum), governed per account rather than per key. `LiveModel` paces
+calls to respect the per-minute ceiling; the daily ceiling cannot be lifted from inside the harness,
+which is why the live results below are a deliberately bounded run rather than the full sweep.
+
+The specific model (`nex-agi/nex-n2.5-pro:free`, overridable via `--model`) was picked by checking
+OpenRouter's own model catalogue directly — the research for this turned up a wall of confident-
+sounding blog rankings naming models that do not otherwise appear in that catalogue at all, which is
+its own small lesson about trusting secondary sources for anything time-sensitive. OpenRouter states
+its own free lineup rotates without notice, which is why the model id is a parameter, not a literal.
+
+Running it live surfaced something no offline test could: this model spends the large majority of
+its token budget on hidden chain-of-thought before writing an answer (measured: 319 of 397
+completion tokens on a plain prompt). An unremarkable prompt exhausted the token ceiling on
+reasoning alone, before any JSON was ever written — invisible to `RehearsedModel`/`ScriptedModel`,
+neither of which reasons at all. The fix was two changes with no monetary cost on a $0 model: cap
+reasoning effort, and raise the output ceiling generously since extra tokens only cost wall-clock
+time. The failure is now diagnosed by name rather than reported as a bare, uninformative silence.
+
+### Search became a `Tool`, not a model capability
+
+No provider offers server-side search for free, so search moved out of `ModelClient` entirely and
+became `WebSearch`, a `Tool` beside `Encyclopedia` and `PageFetch`, using DuckDuckGo's keyless HTML
+front end. This is a strict improvement on the design it replaced, not a workaround forced by the
+provider swap: because search is now a `Tool`, it is cassette-recorded and replayable offline like
+every other retrieval, which the previous model-driven search never was — that one was either a
+live provider call or a scripted stand-in, with nothing in between. `ModelClient` is left with
+exactly one method, which is a more honest statement of what a reasoning provider actually owes
+this harness. The scraping approach is fragile to markup changes by construction, marked with the
+project's own `ponytail:` convention naming the ceiling and the upgrade path.
 
 ## 3. Key findings
 
@@ -144,14 +180,30 @@ Four lessons generalise beyond this project:
 
 ## 4. Limitations
 
-**The live path is unverified.** No API key existed in the build environment. `LiveModel.decide()`
-and `LiveModel.search()` have never executed; their response parsing is tested, the call-and-charge
-glue is not. This is the single largest gap and it is not closable offline.
+**The shipped benchmark numbers still come from the non-reasoning stand-in, deliberately.** The
+free tier's daily request cap (50/day with no credits ever purchased) cannot support a 42-episode
+live sweep in one sitting, so the reproducible submission artifact remains the rehearsed analyst,
+which retrieves real documents and produces real citations but does no analysis — it abstains
+everywhere and scores 21%, correct only on the three abstention cases. These numbers validate the
+harness, not the agent, and should not be read as agent quality.
 
-**Every shipped number comes from a non-reasoning stand-in.** The rehearsed analyst retrieves real
-documents and produces real citations but does no analysis, so it abstains everywhere and scores 21%
-— correct only on the three abstention cases. These numbers validate the harness, not the agent, and
-should not be read as agent quality.
+**The live path itself, however, is now verified — not simulated.** A real `--live --record` run
+completed Direction, Collection, Appraisal, Reconciliation and Reflection in full against a real
+free model — Reflection judged the evidence incomplete and looped back into a second Collection
+round, producing 18 genuinely graded assertions, 72 real ACH judgments, and a substantive
+`supported` verdict with specific, evidence-citing reasoning along the way — before that sixth call
+exceeded the token ceiling and the crash-tolerant halt caught it cleanly. The transcript is kept at
+`docs/example-live-run/`. What remains unverified is a *complete, uninterrupted* multi-phase episode
+reaching Dissemination, and the full 42-episode sweep — both blocked by the same daily quota, not by
+anything the design leaves untested.
+
+**Running it live found a real bug no mock could have.** Appraisal's source gradings were genuine
+and well-reasoned but kept vanishing from the report, because the model wrote the domain field as a
+hostname plus a description, and evidence is keyed by the bare hostname alone. Fixed at the point of
+use, with a regression test — see decision #10 for the full account. This is the clearest evidence
+in the whole project that live verification finds a different class of defect than review does:
+`ScriptedModel` and `RehearsedModel` cannot write free text into a structured field, so neither one
+could have produced this failure, however carefully either was reviewed.
 
 **Reward weights are argued, not derived.** 0.40/0.25/0.20/0.15 expresses a defensible position
 about what matters, but no sensitivity analysis has been run. A different reviewer could argue for
@@ -174,9 +226,10 @@ reported as a step count, so a six-step episode read as "settling at step 0".
 
 ## 5. What I would do next, in order
 
-1. **Run the live recording pass.** One command and a key. It closes the verification gap, replaces
-   every number in this report with a meaningful one, and populates the cassette with real web
-   search alongside the encyclopedia.
+1. **Clear the daily quota over several days, or fund the account past the $10 threshold**, and run
+   the full 42-episode live ablation. The live path is proven to work end to end; what is missing is
+   volume, not verification. At 1,000 requests/day past $10 in lifetime credits, a full sweep
+   becomes a same-day proposition rather than a multi-day one.
 2. **Add a second and third real source type** so source diversity can exceed one and the
    `source_selection` failure stops dominating: a company registry and a news archive.
 3. **Run the reward weights as a sensitivity sweep** rather than asserting them, and report which

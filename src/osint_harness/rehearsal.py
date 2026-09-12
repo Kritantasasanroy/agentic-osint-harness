@@ -13,7 +13,7 @@ from osint_harness.graph.schemas import (
     ReportDraft,
     SourceGrading,
 )
-from osint_harness.model.client import ModelClient, ModelUnavailableError, SearchFindings, Usage
+from osint_harness.model.client import ModelClient, ModelUnavailableError, Usage
 
 
 class RehearsedModel(ModelClient):
@@ -39,11 +39,6 @@ class RehearsedModel(ModelClient):
                 f"but {schema.__name__} was required"
             )
         return reply
-
-    def search(self, _query: str) -> SearchFindings:
-        """No web search offline. Retrieval comes from the encyclopedia, which needs no key."""
-        self._charge(self.COST_PER_CALL)
-        return SearchFindings()
 
     def _reply_to(self, purpose: str, prompt: str) -> BaseModel:
         """The fixed reply for each phase."""

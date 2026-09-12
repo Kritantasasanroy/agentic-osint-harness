@@ -45,18 +45,20 @@ flowchart TB
         MACHINE["InvestigationGraph<br/>routes, records one Step per transition, enforces the budget"]
         PHASES["Direction · Collection · Appraisal<br/>Reconciliation · Reflection · Dissemination"]
         BRIEF["Briefing<br/>filters state by memory mode"]
-        MODEL["ModelClient<br/>LiveModel or RehearsedModel<br/>meters its own token spend"]
+        MODEL["ModelClient · decide() only<br/>LiveModel (OpenRouter) or RehearsedModel<br/>meters its own token spend"]
         MACHINE --> PHASES
         PHASES --> BRIEF
         PHASES --> MODEL
     end
 
-    subgraph outside["External sources — every call recorded"]
+    subgraph outside["External sources — every call recorded, search included"]
         CASS["Cassette<br/>replay is the default; a miss is an error"]
         ENC["Encyclopedia"]
         PAGE["PageFetch"]
+        SEARCH["WebSearch<br/>keyless, DuckDuckGo HTML"]
         CASS --- ENC
         CASS --- PAGE
+        CASS --- SEARCH
     end
 
     subgraph mem["Long-term memory — conclusions only, never documents"]
@@ -74,9 +76,10 @@ flowchart TB
         REPORT["Dossier · Ablation"]
     end
 
-    PHASES -->|"retrieve"| CASS
+    PHASES -->|"retrieve, search"| CASS
     ENC --> INV
     PAGE --> INV
+    SEARCH -.->|"candidates only, never recorded directly"| PHASES
     ARCH -->|"priors, labelled as recall"| BRIEF
     REG -->|"learned grades"| INV
     PHASES --> INV
@@ -105,7 +108,7 @@ recalled material is structurally incapable of becoming a citation.
 | Requirement from the brief | Where it is implemented |
 | --- | --- |
 | Investigate a company, person, or claim | `domain/subject.py` — one mechanism, polymorphic seeds |
-| Gather from multiple external sources | `sources/tools.py`, plus server-side search in `model/live.py` |
+| Gather from multiple external sources | `sources/tools.py` — encyclopedia, page fetch, keyless web search, all cassette-recorded |
 | Plan and adapt as new information appears | `graph/phases.py` — `Reflection` reopens `Collection` |
 | Evaluate evidence and source reliability | Admiralty grading in `domain/provenance.py` |
 | Handle conflicting or insufficient information | ACH in `domain/analysis.py`; the sufficiency override in `Reconciliation` |
@@ -134,3 +137,8 @@ The distinction matters, so it is stated rather than blurred under one heading.
 - **Code, at the sweep boundary** — long-term memory is cleared before a sweep, so a run is
   reproducible from `(case id, memory mode, cassette)`. Verified by running `ablate` twice and
   comparing output.
+- **Code, at `Investigator.investigate()`** — a model failure mid-episode (a real possibility once
+  the live path runs against an actual network) halts the investigation with the failure recorded
+  as its own step, rather than raising and taking the rest of a benchmark sweep down with it. The
+  graph engine itself still does not catch a node's own exception — that boundary is unchanged —
+  this sits one layer further out.

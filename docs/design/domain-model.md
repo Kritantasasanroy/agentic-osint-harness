@@ -261,11 +261,16 @@ Named for the external capability they adapt, not as domain concepts — this is
 allowance, taken deliberately and marked as such.
 
 - `Tool` (abstract) with `WebSearch`, `Encyclopedia`, `PageFetch`. Adapters to external sources.
+  `WebSearch` is keyless (DuckDuckGo's HTML front end), since no provider offers server-side search
+  for free; being a `Tool` rather than a model capability is also why a search is cassette-recorded
+  and replayable offline like every other retrieval.
 - `Cassette`: record/replay of every external interaction, keyed by a hash of the request. **This is
   what makes the memory ablation valid** — all three modes replay byte-identical retrieval, so a
   measured delta is attributable to memory and not to the live web changing between runs. It is also
   what lets the benchmark run offline, with no API key.
-- `ModelClient`, with a deterministic `StubModel` for tests and offline runs.
+- `ModelClient`: exactly one method, `decide()`. Three implementations: `LiveModel` (OpenRouter,
+  provider-agnostic by construction), `RehearsedModel` (deterministic, no reasoning, the CLI's
+  offline default — see `rehearsal.py`), and `ScriptedModel` (fixed replies, used only in tests).
 - `Node` (abstract) and `Transition`: the state-machine contract.
 - `InvestigationGraph`: the engine. Holds the phase-to-node map, runs the loop, records one `Step`
   per transition, and enforces the budget and halt conditions.
@@ -290,9 +295,11 @@ osint-harness bench [--memory MODE]                  # every case in one memory 
 osint-harness ablate                                 # every case in all three modes, and compare
 
 # Global flags, accepted before or after the subcommand:
-#   --live       use the hosted model instead of the rehearsed analyst (needs an API key)
+#   --live       use the hosted model instead of the rehearsed analyst (needs OPENROUTER_API_KEY)
 #   --record     allow live retrieval and write it to the cassette (otherwise replay only)
 #   --max-steps  per-episode step ceiling
+#   --model      OpenRouter model id (default a free-tier model; free lineups rotate, so this
+#                is a flag rather than a literal baked into the client)
 
 # Note: offline replay is the DEFAULT rather than an --offline flag, which is a stronger guarantee
 # than an opt-in. There is deliberately no command to investigate an ad-hoc subject yet: every run

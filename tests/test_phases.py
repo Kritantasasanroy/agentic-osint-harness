@@ -38,6 +38,7 @@ from osint_harness.graph.schemas import (
     DirectionPlan,
     ExtractedAssertion,
     PlannedLead,
+    ReadingChoice,
     ReconciliationResult,
     ReflectionResult,
     ReportDraft,
@@ -198,7 +199,7 @@ class TestCollection:
         investigation = Episode.opened()
 
         Collection(
-            self._planned(), StubSource((Episode.document(),)), StubSource(())
+            self._planned(), StubSource((Episode.document(),)), StubSource(()), StubSource(())
         ).advance(investigation)
 
         assert Episode.ARTICLE in investigation.documents
@@ -207,7 +208,9 @@ class TestCollection:
         investigation = Episode.opened()
         dead = DeadSource(Cassette(mode=CassetteMode.RECORD))
 
-        transition = Collection(self._planned(), dead, StubSource(())).advance(investigation)
+        transition = Collection(
+            self._planned(), dead, StubSource(()), StubSource(())
+        ).advance(investigation)
 
         assert transition.next_phase is InvestigationPhase.APPRAISAL
         assert transition.tool_calls[0].succeeded is False
@@ -217,7 +220,9 @@ class TestCollection:
         investigation = Episode.opened()
         sealed = StubSource((), cassette=Cassette(mode=CassetteMode.REPLAY))
 
-        transition = Collection(self._planned(), sealed, StubSource(())).advance(investigation)
+        transition = Collection(
+            self._planned(), sealed, StubSource(()), StubSource(())
+        ).advance(investigation)
 
         assert transition.tool_calls[0].succeeded is False
         assert "cassette" in transition.tool_calls[0].failure_reason
@@ -227,10 +232,50 @@ class TestCollection:
         investigation.leads.append(Lead(question="Who owns it?"))
 
         Collection(
-            self._planned(), StubSource((Episode.document(),)), StubSource(())
+            self._planned(), StubSource((Episode.document(),)), StubSource(()), StubSource(())
         ).advance(investigation)
 
         assert investigation.open_leads() == ()
+
+    def test_a_chosen_search_hit_is_opened_in_full_and_recorded(self) -> None:
+        investigation = Episode.opened()
+        model = ScriptedModel()
+        model.script("collection", CollectionPlan(search_queries=("Acme dissolved",)))
+        model.script("reading_choice", ReadingChoice(urls=(Episode.ARTICLE,)))
+        snippet = Document.retrieved(url=Episode.ARTICLE, title="hit", text="short snippet")
+
+        Collection(
+            model, StubSource(()), StubSource((Episode.document(),)), StubSource((snippet,))
+        ).advance(investigation)
+
+        assert investigation.documents[Episode.ARTICLE].text == Episode.document().text
+
+    def test_a_search_hit_never_opened_is_not_recorded_as_a_document(self) -> None:
+        investigation = Episode.opened()
+        model = ScriptedModel()
+        model.script("collection", CollectionPlan(search_queries=("Acme dissolved",)))
+        model.script("reading_choice", ReadingChoice(urls=()))
+        other = "https://ft.com/unopened-hit"
+        snippet = Document.retrieved(url=other, title="hit", text="short snippet")
+
+        Collection(
+            model, StubSource(()), StubSource(()), StubSource((snippet,))
+        ).advance(investigation)
+
+        assert other not in investigation.documents
+
+    def test_a_failing_search_tool_is_recorded_as_a_failed_lookup_not_a_crash(self) -> None:
+        investigation = Episode.opened()
+        model = ScriptedModel()
+        model.script("collection", CollectionPlan(search_queries=("Acme dissolved",)))
+        dead = DeadSource(Cassette(mode=CassetteMode.RECORD))
+
+        transition = Collection(
+            model, StubSource(()), StubSource(()), dead
+        ).advance(investigation)
+
+        failed = [call for call in transition.tool_calls if call.tool == "dead_source"]
+        assert failed and failed[0].succeeded is False
 
 
 class TestAppraisal:
@@ -471,7 +516,7 @@ class TestFullCycle:
         nodes: dict[InvestigationPhase, Node] = {
             InvestigationPhase.DIRECTION: Direction(model),
             InvestigationPhase.COLLECTION: Collection(
-                model, StubSource((Episode.document(),)), StubSource(())
+                model, StubSource((Episode.document(),)), StubSource(()), StubSource(())
             ),
             InvestigationPhase.APPRAISAL: Appraisal(model),
             InvestigationPhase.RECONCILIATION: Reconciliation(model),

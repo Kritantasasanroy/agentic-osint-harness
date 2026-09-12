@@ -13,7 +13,7 @@ from osint_harness.domain.investigation import (
     ToolCall,
     UngroundedEvidenceError,
 )
-from osint_harness.domain.provenance import Source
+from osint_harness.domain.provenance import Document, Source
 from osint_harness.graph.briefing import Briefing
 from osint_harness.graph.machine import Node, Transition
 from osint_harness.graph.schemas import (
@@ -25,7 +25,7 @@ from osint_harness.graph.schemas import (
     ReflectionResult,
     ReportDraft,
 )
-from osint_harness.model.client import ModelClient, ModelUnavailableError, SearchResult
+from osint_harness.model.client import ModelClient
 from osint_harness.sources.cassette import CassetteMissError
 from osint_harness.sources.tools import Tool
 
@@ -122,10 +122,13 @@ class Collection(Phase):
     MAX_LOOKUPS = 2
     MAX_READS = 4
 
-    def __init__(self, model: ModelClient, encyclopedia: Tool, pages: Tool) -> None:
+    def __init__(
+        self, model: ModelClient, encyclopedia: Tool, pages: Tool, web_search: Tool
+    ) -> None:
         super().__init__(model)
         self._encyclopedia = encyclopedia
         self._pages = pages
+        self._web_search = web_search
 
     def conduct(self, investigation: Investigation) -> Transition:
         briefing = Briefing(investigation)
@@ -141,7 +144,7 @@ class Collection(Phase):
         for topic in plan.encyclopedia_lookups[: self.MAX_LOOKUPS]:
             calls.append(self._retrieve(self._encyclopedia, topic, investigation))
 
-        hits: list[SearchResult] = []
+        hits: list[Document] = []
         for query in plan.search_queries[: self.MAX_SEARCHES]:
             call, found = self._search(query)
             calls.append(call)
@@ -168,7 +171,7 @@ class Collection(Phase):
         self,
         investigation: Investigation,
         proposed: tuple[str, ...],
-        hits: list[SearchResult],
+        hits: list[Document],
     ) -> tuple[str, ...]:
         """Pick what to actually open. Choosing badly here is a source-selection failure."""
         chosen = list(proposed)
@@ -192,15 +195,27 @@ class Collection(Phase):
                 seen[url] = None
         return tuple(seen)[: self.MAX_READS]
 
-    def _search(self, query: str) -> tuple[ToolCall, tuple[SearchResult, ...]]:
-        """Search, recording a failed search as a failure rather than as an empty success."""
+    def _search(self, query: str) -> tuple[ToolCall, tuple[Document, ...]]:
+        """Search for candidate leads. A hit is never recorded as evidence directly — only a page
+        actually opened through `_retrieve` becomes a citable document."""
+        return self._gather(self._web_search, query)
+
+    def _retrieve(self, tool: Tool, query: str, investigation: Investigation) -> ToolCall:
+        """Fetch through one source, recording a dead source rather than letting it end the run."""
+        call, documents = self._gather(tool, query)
+        for document in documents:
+            investigation.record_document(document)
+        return call
+
+    def _gather(self, tool: Tool, query: str) -> tuple[ToolCall, tuple[Document, ...]]:
+        """Reach one source, timed, recording a failure rather than raising it."""
         started = perf_counter()
         try:
-            findings = self._model.search(query)
-        except ModelUnavailableError as failure:
+            documents = tool.gather(query)
+        except (httpx.HTTPError, CassetteMissError) as failure:
             return (
                 ToolCall(
-                    tool="web_search",
+                    tool=tool.name,
                     query=query,
                     documents_returned=0,
                     succeeded=False,
@@ -211,37 +226,13 @@ class Collection(Phase):
             )
         return (
             ToolCall(
-                tool="web_search",
+                tool=tool.name,
                 query=query,
-                documents_returned=len(findings.results),
+                documents_returned=len(documents),
                 succeeded=True,
                 latency_seconds=perf_counter() - started,
             ),
-            findings.results,
-        )
-
-    def _retrieve(self, tool: Tool, query: str, investigation: Investigation) -> ToolCall:
-        """Fetch through one source, recording a dead source rather than letting it end the run."""
-        started = perf_counter()
-        try:
-            documents = tool.gather(query)
-        except (httpx.HTTPError, CassetteMissError) as failure:
-            return ToolCall(
-                tool=tool.name,
-                query=query,
-                documents_returned=0,
-                succeeded=False,
-                latency_seconds=perf_counter() - started,
-                failure_reason=str(failure),
-            )
-        for document in documents:
-            investigation.record_document(document)
-        return ToolCall(
-            tool=tool.name,
-            query=query,
-            documents_returned=len(documents),
-            succeeded=True,
-            latency_seconds=perf_counter() - started,
+            documents,
         )
 
 
@@ -267,7 +258,9 @@ class Appraisal(Phase):
 
         for grading in result.gradings:
             investigation.grade_source(
-                grading.domain, grading.reliability, grading.reason or "no reason recorded"
+                Source.domain_only(grading.domain),
+                grading.reliability,
+                grading.reason or "no reason recorded",
             )
 
         recorded: list[str] = []

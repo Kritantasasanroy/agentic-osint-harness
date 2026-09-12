@@ -46,7 +46,10 @@ class ExtractedAssertion(BaseModel):
 class SourceGrading(BaseModel):
     """Appraisal's judgment of a publisher's track record, with the reason recorded."""
 
-    domain: str = Field(min_length=1)
+    domain: str = Field(
+        min_length=1,
+        description="A bare registrable domain such as en.wikipedia.org. No extra words.",
+    )
     reliability: SourceReliability = SourceReliability.CANNOT_BE_JUDGED
     reason: str = ""
 

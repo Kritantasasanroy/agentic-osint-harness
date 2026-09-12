@@ -11,12 +11,12 @@ from osint_harness.domain.investigation import Budget, Investigation, MemoryMode
 from osint_harness.investigator import Investigator
 from osint_harness.memory.archive import InvestigationArchive, SourceRegister
 from osint_harness.model.client import ModelClient
-from osint_harness.model.live import LiveModel
+from osint_harness.model.live import DEFAULT_MODEL, LiveModel
 from osint_harness.rehearsal import RehearsedModel
 from osint_harness.report.ablation import Ablation
 from osint_harness.report.dossier import Dossier
 from osint_harness.sources.cassette import Cassette, CassetteMode
-from osint_harness.sources.tools import Encyclopedia, PageFetch
+from osint_harness.sources.tools import Encyclopedia, PageFetch, WebSearch
 
 
 class Workspace:
@@ -68,10 +68,11 @@ class Workspace:
 class Harness:
     """Wires the pieces together for one command and writes what it produced."""
 
-    def __init__(self, workspace: Workspace, live: bool, record: bool) -> None:
+    def __init__(self, workspace: Workspace, live: bool, record: bool, model: str) -> None:
         self._workspace = workspace
         self._live = live
         self._record = record
+        self._model_id = model
         self._cassette = Cassette.load(
             workspace.cassette_path(),
             CassetteMode.RECORD if record else CassetteMode.REPLAY,
@@ -79,7 +80,7 @@ class Harness:
 
     def model(self) -> ModelClient:
         """The reasoning engine, real or rehearsed."""
-        return LiveModel() if self._live else RehearsedModel()
+        return LiveModel(model=self._model_id) if self._live else RehearsedModel()
 
     def investigator(self, memory_mode: MemoryMode) -> Investigator:
         """An investigator wired to this mode's own memory, so the arms stay independent."""
@@ -87,6 +88,7 @@ class Harness:
             model=self.model(),
             encyclopedia=Encyclopedia(self._cassette),
             pages=PageFetch(self._cassette),
+            web_search=WebSearch(self._cassette),
             archive=InvestigationArchive.read_from(self._workspace.archive_path(memory_mode)),
             register=SourceRegister.read_from(self._workspace.register_path(memory_mode)),
         )
@@ -144,6 +146,7 @@ class Invocation(BaseModel):
     live: bool = False
     record: bool = False
     max_steps: int = Field(default=24, gt=0)
+    model: str = DEFAULT_MODEL
 
     def budget(self) -> Budget:
         """The per-episode ceiling this invocation asked for."""
@@ -178,6 +181,12 @@ class CommandLine:
             default=argparse.SUPPRESS,
             help="per-episode step ceiling (default 24)",
         )
+        shared.add_argument(
+            "--model",
+            default=argparse.SUPPRESS,
+            help=f"OpenRouter model id to use with --live (default {DEFAULT_MODEL}); free-tier "
+            "model availability rotates, so this is a one-line swap rather than a code change",
+        )
         return shared
 
     @classmethod
@@ -188,7 +197,14 @@ class CommandLine:
             description="An agentic OSINT investigation harness with an evaluation benchmark.",
             parents=[cls.shared_flags()],
         )
-        parser.set_defaults(live=False, record=False, max_steps=24, case_id="", memory="short")
+        parser.set_defaults(
+            live=False,
+            record=False,
+            max_steps=24,
+            case_id="",
+            memory="short",
+            model=DEFAULT_MODEL,
+        )
         commands = parser.add_subparsers(dest="command", required=True)
         memory_choices = [mode.value for mode in MemoryMode]
 
@@ -224,7 +240,12 @@ class CommandLine:
         if invocation.command == "cases":
             return self._list_cases()
 
-        harness = Harness(self._workspace, live=invocation.live, record=invocation.record)
+        harness = Harness(
+            self._workspace,
+            live=invocation.live,
+            record=invocation.record,
+            model=invocation.model,
+        )
         if invocation.command == "investigate":
             return self._investigate(
                 harness, invocation.case_id, invocation.memory, invocation.budget()

@@ -1,5 +1,7 @@
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import ClassVar
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -62,6 +64,12 @@ class InformationCredibility(StrEnum):
 class Source(BaseModel):
     """A publisher of information, existing independently of any one investigation."""
 
+    _HOSTNAME: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?:https?://|//)?"
+        r"([a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+)",
+        re.IGNORECASE,
+    )
+
     domain: str = Field(min_length=1)
     reliability: SourceReliability = SourceReliability.CANNOT_BE_JUDGED
     reason: str = "not yet assessed"
@@ -71,6 +79,26 @@ class Source(BaseModel):
         """The host portion of a URL, lowercased and stripped of a leading www."""
         host = urlparse(url).netloc.lower()
         return host.partition(":")[0].removeprefix("www.")
+
+    @classmethod
+    def domain_only(cls, text: str) -> str:
+        """A bare registrable domain, wherever it appears in free text and however it is dressed.
+
+        Two earlier versions of this each fixed the exact shape an audit had just broken and
+        nothing more: first a plain first-token split (broken by trailing commentary), then a
+        first-token split with punctuation-stripping and URL-detection (broken by a domain with
+        no scheme sitting mid-sentence, e.g. `"the domain is en.wikipedia.org"`, and a bare
+        `"domain.tld/path"` with no scheme to detect). Both were guessing the domain's *position*
+        in the string. This searches for the *shape* of a hostname instead — labels separated by
+        dots, with or without a leading scheme — wherever it occurs, which is what actually varies
+        across how a model phrases "here is a domain." If nothing hostname-shaped is found at all,
+        the text is returned as-is (lowercased): a model returning pure garbage for this field is
+        a different failure than mis-formatting a real answer, and no string transform fixes it.
+        """
+        match = cls._HOSTNAME.search(text)
+        if match is None:
+            return text.strip().lower()
+        return match.group(1).lower().removeprefix("www.")
 
     def regrade(self, reliability: SourceReliability, reason: str) -> None:
         """Record a new reliability grade together with the justification for it."""

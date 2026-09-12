@@ -32,7 +32,7 @@ reasoning, so it abstains on every case. That is deliberate — see
 [Honest status](#honest-status-what-is-and-is-not-verified). To run the real thing:
 
 ```bash
-export ANTHROPIC_API_KEY=...
+export OPENROUTER_API_KEY=...
 osint-harness --live --record ablate
 ```
 
@@ -130,13 +130,14 @@ outside the guarded path — and the validator exists because of that.
 runs a real case end to end and asserts that none of its expected findings, notes, or trap labels
 appear in any prompt the model saw.
 
-### 7. Refusal fallbacks are deliberately disabled
+### 7. No fallback routing across models, even though the platform offers it
 
-Server-side refusal fallbacks silently re-run a declined request on a different model. They are not
-configured here, deliberately: enabling them would put episodes produced by **two different models**
-into the same benchmark — the same class of error as comparing memory modes against different
-evidence. A refusal is raised, the episode is tagged, and it stays in the denominator. For a product
-that trade is usually worth making; for a measurement it is not.
+OpenRouter can silently re-route a failed or declined request to a different model behind the same
+call. That is not configured here, deliberately: substituting a different model mid-benchmark would
+put episodes produced by **two different models** into the same comparison — the same class of
+error as comparing memory modes against different evidence. A failure raises, the episode is
+tagged, and it stays in the denominator. For a product that trade is usually worth making; for a
+measurement it is not.
 
 ### 8. Reward is decomposed, version-stamped, and computed offline
 
@@ -166,6 +167,49 @@ Related: `INSUFFICIENT_EVIDENCE` is a **judgment**, not a hypothesis. A refusal 
 claim and therefore cannot be disconfirmed, so putting it in the ACH matrix would let "we don't
 know" accumulate consistency scores against evidence it says nothing about.
 
+### 10. OpenRouter over a single vendor's API, and why that model specifically
+
+`ModelClient` only ever needed one capability from a provider: turn a prompt into valid structured
+JSON. Nothing in the design depends on a specific lab, so the harness runs against OpenRouter, which
+fronts many providers — including models priced at literally zero — behind one API and one key.
+That is a real constraint worth being explicit about: the free tier is **rate-limited, not
+metered** — 20 requests/minute and 50/day with no credits ever purchased (1,000/day past a one-time
+$10 minimum), enforced per account rather than per key. `LiveModel` paces every call to stay under
+the per-minute ceiling; the daily ceiling is a hard wall this harness cannot lift, which is why the
+verified live results below are a deliberately small run, not the full 42-episode sweep.
+
+The specific free model (`nex-agi/nex-n2.5-pro:free` by default, one line to change) was chosen by
+checking OpenRouter's own model listing directly rather than trusting blog rankings, since the
+research for this decision turned up a wall of programmatic-SEO content confidently naming models
+that don't otherwise appear anywhere in that provider's real catalogue. The free lineup is stated by
+OpenRouter itself to rotate without notice — "free today, paid tomorrow" — which is why the model id
+is a constructor parameter and a `--model` flag, not a hardcoded string.
+
+Running it live surfaced a real, load-bearing discovery no mock would have caught: this model
+spends the large majority of its token budget on hidden chain-of-thought before writing an answer
+(observed: 319 of 397 completion tokens on a simple prompt). Left unconstrained, an unremarkable
+prompt exhausted the token ceiling on reasoning alone, before the model ever wrote a JSON reply — a
+failure the fixed `RehearsedModel`/`ScriptedModel` tests could never exhibit, because neither one
+reasons. Two changes fixed it: capping reasoning effort (`reasoning: {"effort": "low"}`, a parameter
+this model exposes) and raising the output ceiling generously, since token generation on a $0 model
+costs nothing but time. The failure is now diagnosed by name (`... the model spent its budget on
+reasoning ... raise max_tokens or lower reasoning effort`) rather than a bare "no reply", precisely
+because the first time it happened, it wasn't.
+
+### 11. Search became a self-hosted `Tool`, not a model capability
+
+No provider offers server-side web search for free. Rather than special-case the live path around
+that, search moved out of `ModelClient` entirely and became a `Tool` — `WebSearch`, using
+DuckDuckGo's keyless HTML front end — sitting beside `Encyclopedia` and `PageFetch`. This is a
+strict improvement, not a workaround: because it is a `Tool`, a search is now cassette-recorded and
+replayable offline like every other retrieval, which was never true before (the previous
+model-driven search was either a live provider call or a scripted stand-in, with no state in
+between). `ModelClient` now has exactly one method, `decide()`, which is a cleaner statement of what
+a reasoning provider actually owes this harness. Scraping DuckDuckGo's HTML is fragile to markup
+changes by design of the approach, not by oversight — marked with the project's own `ponytail:`
+convention for a deliberate ceiling with a named upgrade path (a paid search API, if reliability
+becomes the bottleneck).
+
 ---
 
 ## The benchmark
@@ -188,19 +232,17 @@ All four judgments and all seven traps are exercised, and a test fails if that s
 
 ## Honest status: what is and is not verified
 
-**Verified, by commands you can re-run:** 216 tests pass, `mypy --strict` is clean across 40 source
+**Verified, by commands you can re-run:** 239 tests pass, `mypy --strict` is clean across 40 source
 files, `ruff check` is clean, and a full 42-episode ablation (14 cases x 3 memory modes) runs end to
 end offline and writes its report. Running `ablate` twice produces byte-identical output, which is
 what makes the numbers below quotable at all.
 
-**Not verified:** the live model path. No `ANTHROPIC_API_KEY` was available in the environment this
-was built in, so `LiveModel.decide()` and `LiveModel.search()` have **never executed**. Their
-response parsing is tested; the call-and-charge glue is not. Every shipped number below comes from
-the rehearsed analyst.
-
-**What the shipped numbers therefore mean.** The rehearsed analyst abstains on every case, so it is
-correct only on the three where abstention is the right answer — 3/14 = 21%. This validates the
-machinery, not the agent:
+**The deterministic sweep below still runs the rehearsed analyst**, not the live model, and that is
+deliberate rather than a gap: the free tier's daily request cap (50/day with no credits ever
+purchased) cannot support a 42-episode live sweep (200+ calls) in one sitting, and a benchmark run
+that stops partway through would be worse than an honestly-labelled offline one. The rehearsed
+analyst abstains on every case, so it is correct only on the three where abstention is the right
+answer — 3/14 = 21%. This validates the machinery, not the agent:
 
 | Memory | Accuracy | Mean reward | Irrelevant retrieval | Harmful retrieval | Memory-interference failures |
 | --- | --- | --- | --- | --- | --- |
@@ -212,7 +254,33 @@ The one genuinely informative row is the last column: **`long` mode shows memory
 `none` and `short` do not**, on similarly-named subjects, detected and attributed automatically.
 The instrumentation works even when the analyst behind it does not.
 
-Reproducing the real numbers is one command and an API key: `osint-harness --live --record ablate`.
+**The live path itself is now verified, on a real case, against a real free model — not simulated.**
+A single `--live --record` run of `ada-lovelace-person` completed five phases in full — Direction,
+Collection, Appraisal, Reconciliation, and Reflection, which then looped back into a second
+Collection round — before that sixth call was truncated by the model's token ceiling. Everything up
+to that point is real: search, Wikipedia retrieval, 18 graded assertions extracted from real page
+text, 72 ACH evidence-hypothesis judgments, and a genuine `supported` verdict at 0.78 probability
+with specific reasoning citing which hypothesis survived which disconfirming fact. The full
+transcript is kept at [`docs/example-live-run/`](docs/example-live-run/) exactly as produced, not
+edited for presentation.
+
+Running it live surfaced two real findings no mock could have:
+- This model spends most of its token budget on hidden reasoning before answering, and an
+  unremarkable prompt exhausted a first, tighter token ceiling before writing anything at all —
+  fixed by capping reasoning effort and raising the ceiling (see decision #10 above).
+- Appraisal graded sources with genuine, well-reasoned Admiralty judgments, but wrote the domain
+  field as `"en.wikipedia.org — biographical, technical, commemorative..."` rather than a bare
+  hostname; because evidence is always keyed by the clean domain alone, every grading landed under
+  a key nothing looked up. Real analytic output, silently discarded — a live-only bug no scripted
+  test could produce, since neither `ScriptedModel` nor `RehearsedModel` writes free text into a
+  structured field. Fixed at the point of use (`Source.domain_only`), with a regression test.
+
+The run still ended in a halt, on that reflection-driven second Collection call exceeding even the
+raised ceiling — the crash-tolerant halt handled it exactly as designed, producing a complete,
+honestly-labelled dossier instead of a crash. Reproducing or extending this is one command and a key:
+`osint-harness --live --record investigate <case-id>`. A full live ablation is one command too
+(`osint-harness --live --record ablate`), but will need either a paid OpenRouter balance or running
+across several days to clear the free-tier daily cap.
 
 ---
 
@@ -222,8 +290,8 @@ Reproducing the real numbers is one command and an API key: `osint-harness --liv
 src/osint_harness/
   domain/        subjects, provenance and Admiralty grading, evidence and ACH, the investigation
   graph/         the state machine, the six phases, the memory-gated briefing, reply schemas
-  sources/       external sources behind the record/replay cassette
-  model/         the reasoning client, live and scripted
+  sources/       encyclopedia, page fetch and keyless web search, all behind the record/replay cassette
+  model/         the reasoning client — OpenRouter-backed live model, or scripted for tests
   memory/        the cross-episode archive and the publisher register
   bench/         benchmark cases, reward, failure taxonomy, run aggregation
   report/        the analyst-facing dossier and the ablation report

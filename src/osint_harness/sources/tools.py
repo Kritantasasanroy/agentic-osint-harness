@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from html.parser import HTMLParser
 from typing import ClassVar
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import httpx
 from pydantic import BaseModel, Field
@@ -166,3 +166,110 @@ class PageFetch(Tool):
         """A usable title for a page whose markup did not give a clean one."""
         opening = text[:80].strip()
         return opening if opening else "untitled page"
+
+
+class DuckDuckGoResults(HTMLParser):
+    """A search results page reduced to (url, title, snippet) triples, in result order.
+
+    DuckDuckGo's own template puts a result's title link and its snippet link in the same fixed
+    order for every result, so two ordered lists collected in one pass and zipped together is
+    simpler and just as reliable as tracking which snippet belongs to which title inline.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._titles: list[tuple[str, str]] = []
+        self._snippets: list[str] = []
+        self._capturing: str = ""
+        self._buffer: list[str] = []
+        self._pending_href = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        classes = dict(attrs).get("class") or ""
+        if "result__a" in classes:
+            self._capturing = "title"
+            self._buffer = []
+            self._pending_href = dict(attrs).get("href") or ""
+        elif "result__snippet" in classes:
+            self._capturing = "snippet"
+            self._buffer = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or not self._capturing:
+            return
+        text = " ".join("".join(self._buffer).split())
+        if self._capturing == "title":
+            self._titles.append((self._resolved_url(self._pending_href), text))
+        else:
+            self._snippets.append(text)
+        self._capturing = ""
+        self._buffer = []
+
+    def handle_data(self, data: str) -> None:
+        if self._capturing:
+            self._buffer.append(data)
+
+    @classmethod
+    def _resolved_url(cls, href: str) -> str:
+        """DuckDuckGo wraps result links in its own redirect; unwrap it to the real destination."""
+        parsed = urlparse(href)
+        if parsed.netloc.endswith("duckduckgo.com") and parsed.path == "/l/":
+            target = parse_qs(parsed.query).get("uddg", [""])[0]
+            return unquote(target) if target else href
+        if href.startswith("http"):
+            return href
+        return f"https:{href}" if href.startswith("//") else href
+
+    def results(self) -> tuple[tuple[str, str, str], ...]:
+        """(url, title, snippet) triples, one per result, in page order."""
+        return tuple(
+            (url, title, snippet)
+            for (url, title), snippet in zip(self._titles, self._snippets, strict=False)
+            if url.startswith("http")
+        )
+
+    @classmethod
+    def of(cls, html: str) -> tuple[tuple[str, str, str], ...]:
+        """Read a results page and return its (url, title, snippet) triples."""
+        parser = cls()
+        parser.feed(html)
+        return parser.results()
+
+
+class WebSearch(Tool):
+    """Keyless web search via DuckDuckGo's HTML front end.
+
+    No provider offers server-side search for free, so this harness owns the capability itself
+    rather than depending on one. That also closes a gap the earlier model-provided search never
+    had: because this is a `Tool`, its results are cassette-recorded like every other retrieval, so
+    a search step can be replayed offline instead of only ever being a scripted stand-in.
+
+    Results carry only the search snippet, never the full page: a snippet is a lead to weigh, not
+    evidence to cite. `Collection` decides which results are worth opening in full through
+    `PageFetch` before anything is recorded against the investigation.
+    """
+
+    ENDPOINT = "https://html.duckduckgo.com/html/"
+    MAX_RESULTS: ClassVar[int] = 6
+    # ponytail: HTML scraping is fragile to markup changes; swap for a paid search API
+    # (Brave/Serper) if result quality or reliability becomes the bottleneck.
+
+    @property
+    def name(self) -> str:
+        return "web_search"
+
+    def retrieve(self, query: str) -> tuple[Document, ...]:
+        response = httpx.post(
+            self.ENDPOINT,
+            data={"q": query},
+            headers={"User-Agent": self.USER_AGENT},
+            timeout=self._timeout_seconds,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        return tuple(
+            Document.retrieved(url=url, title=title or url, text=snippet)
+            for url, title, snippet in DuckDuckGoResults.of(response.text)[: self.MAX_RESULTS]
+        )

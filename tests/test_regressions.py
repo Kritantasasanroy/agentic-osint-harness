@@ -7,6 +7,7 @@ these fails against a test that says plainly what was wrong the first time.
 
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -22,13 +23,21 @@ from osint_harness.domain.investigation import (
 from osint_harness.domain.provenance import (
     Document,
     InformationCredibility,
+    Source,
     SourceReliability,
 )
 from osint_harness.domain.subject import Company
 from osint_harness.graph.briefing import Briefing
-from osint_harness.graph.phases import Collection, Dissemination, Reconciliation
-from osint_harness.graph.schemas import CollectionPlan, ReconciliationResult, ReportDraft
-from osint_harness.model.client import ModelUnavailableError, ScriptedModel, SearchFindings
+from osint_harness.graph.phases import Appraisal, Collection, Dissemination, Reconciliation
+from osint_harness.graph.schemas import (
+    AppraisalResult,
+    CollectionPlan,
+    ExtractedAssertion,
+    ReconciliationResult,
+    ReportDraft,
+    SourceGrading,
+)
+from osint_harness.model.client import ScriptedModel
 from osint_harness.report.dossier import Dossier
 from osint_harness.sources.cassette import Cassette, CassetteMode
 from osint_harness.sources.tools import Tool
@@ -82,11 +91,15 @@ class Episode:
         )
 
 
-class SilentSearchFailure(ScriptedModel):
-    """A model whose web search is unavailable, to prove the failure is recorded not swallowed."""
+class DeadWebSearch(Tool):
+    """A search tool that cannot be reached, to prove the failure is recorded, not swallowed."""
 
-    def search(self, _query: str) -> SearchFindings:
-        raise ModelUnavailableError("search backend unavailable")
+    @property
+    def name(self) -> str:
+        return "web_search"
+
+    def retrieve(self, _query: str) -> tuple[Document, ...]:
+        raise httpx.ConnectError("search backend unavailable")
 
 
 class DeadTool(Tool):
@@ -429,21 +442,125 @@ class TestEvidenceIsPaidForOnce:
 
 
 class TestSearchFailuresAreRecorded:
-    """Gate finding: `_search` hard-coded `succeeded=True` and caught nothing, so a failing search
-    either crashed the episode or was logged as a success and could never raise TOOL_FAILURE."""
+    """Gate finding (predating the OpenRouter/tool-based search rewrite): the old model-driven
+    search hard-coded `succeeded=True` and caught nothing, so a failing search either crashed the
+    episode or was logged as a success and could never raise TOOL_FAILURE. Search later became a
+    `Tool` like every other source; this proves the same property still holds under that
+    architecture — a failing search is a recorded failure, never a crash or a false success."""
 
     def test_a_failing_search_is_recorded_as_a_failed_lookup(self) -> None:
         investigation = Investigation.open(
             run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
         )
-        model = SilentSearchFailure()
+        model = ScriptedModel()
         model.script("collection", CollectionPlan(search_queries=("Acme Corp",)))
-        model.script("reading_choice", ReportDraft())
-        sources = DeadTool(Cassette(mode=CassetteMode.RECORD))
+        empty = DeadTool(Cassette(mode=CassetteMode.RECORD))
+        dead_search = DeadWebSearch(Cassette(mode=CassetteMode.RECORD))
 
-        transition = Collection(model, sources, sources).advance(investigation)
+        transition = Collection(model, empty, empty, dead_search).advance(investigation)
 
         searches = [call for call in transition.tool_calls if call.tool == "web_search"]
         assert searches
         assert searches[0].succeeded is False
         assert "unavailable" in searches[0].failure_reason
+
+
+class TestAGradingSurvivesWhateverTheModelWritesInDomain:
+    """The original bug was found by actually running the live path, not by an audit: a real free
+    model graded sources thoughtfully but wrote the domain field as "en.wikipedia.org —
+    biographical and technical articles" rather than a bare hostname. Because evidence is always
+    keyed by the clean domain Source.registrable_domain derives from its URL, the grading landed
+    under a different dictionary key than anything ever looked up — real analytic work, silently
+    discarded.
+
+    Two subsequent independent-audit rounds each broke the fix that closed the round before it —
+    a token-splitting version broken by trailing punctuation and a bare URL, then a
+    punctuation-stripping-plus-URL-detection version broken by a domain sitting mid-sentence and a
+    scheme-less URL with a path. The current version searches for the hostname *pattern* itself
+    (dot-separated labels, wherever they occur) rather than guessing at the domain's position in
+    the string, which is what both earlier versions were actually doing under different framing."""
+
+    def test_a_domain_with_trailing_commentary_still_grades_its_evidence(self) -> None:
+        investigation = Investigation.open(
+            run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
+        )
+        investigation.record_document(Episode.document())
+        model = ScriptedModel()
+        model.script(
+            "appraisal",
+            AppraisalResult(
+                assertions=(
+                    ExtractedAssertion(
+                        assertion=Episode.ASSERTION,
+                        document_url=Episode.ARTICLE,
+                        credibility=InformationCredibility.CONFIRMED,
+                    ),
+                ),
+                gradings=(
+                    SourceGrading(
+                        domain="reuters.com — a major international wire service",
+                        reliability=SourceReliability.COMPLETELY_RELIABLE,
+                        reason="wire service",
+                    ),
+                ),
+            ),
+        )
+
+        Appraisal(model).advance(investigation)
+
+        assert investigation.reliability_of("reuters.com") is SourceReliability.COMPLETELY_RELIABLE
+
+    def test_domain_only_keeps_a_clean_domain_unchanged(self) -> None:
+        assert Source.domain_only("reuters.com") == "reuters.com"
+
+    def test_domain_only_finds_a_domain_wrapped_in_commentary_and_normalises_it(self) -> None:
+        assert Source.domain_only("Reuters.com — a wire service") == "reuters.com"
+        assert Source.domain_only("www.reuters.com and nothing else") == "reuters.com"
+
+    def test_domain_only_is_not_thrown_by_trailing_punctuation(self) -> None:
+        """Round one of an independent audit: a token followed directly by punctuation, with no
+        separating whitespace, kept the punctuation under the first (token-splitting) version of
+        this fix and so still failed to match the clean key evidence is stored under."""
+        assert Source.domain_only("en.wikipedia.org, and other pages") == "en.wikipedia.org"
+        assert Source.domain_only("reuters.com.") == "reuters.com"
+
+    def test_domain_only_reduces_a_full_url_to_its_host(self) -> None:
+        """Round one, counterexample two: a model echoing back a full URL instead of a bare
+        domain, left completely unreduced by the first version."""
+        assert (
+            Source.domain_only("https://en.wikipedia.org/wiki/Ada_Lovelace") == "en.wikipedia.org"
+        )
+        assert Source.domain_only("//en.wikipedia.org/wiki/Ada_Lovelace") == "en.wikipedia.org"
+
+    def test_domain_only_finds_the_domain_regardless_of_where_it_sits_in_the_sentence(
+        self,
+    ) -> None:
+        """Round two of the same audit, against the token-splitting-plus-punctuation-stripping
+        second version: a domain preceded by other words was never found at all, because that
+        version only ever looked at the FIRST token. `"the domain is en.wikipedia.org"` returned
+        `"the"` — a plausible model phrasing this project had not yet tried to break."""
+        assert Source.domain_only("the domain is en.wikipedia.org") == "en.wikipedia.org"
+
+    def test_domain_only_reduces_a_schemeless_url_with_a_path_to_its_host(self) -> None:
+        """Round two, counterexample two: a URL missing its scheme but still carrying a path
+        (`"en.wikipedia.org/wiki/Ada_Lovelace"`, no `http://`) was not recognised as URL-shaped by
+        the second version's `"://"`-or-`"//"`-prefix check, so the path stayed attached. The
+        current version searches for the hostname pattern itself rather than guessing from a
+        scheme marker, so a scheme is no longer required to find it."""
+        assert Source.domain_only("en.wikipedia.org/wiki/Ada_Lovelace") == "en.wikipedia.org"
+        assert (
+            Source.domain_only("mathshistory.st-andrews.ac.uk/Biographies/Lovelace")
+            == "mathshistory.st-andrews.ac.uk"
+        )
+
+    def test_domain_only_strips_quote_or_backtick_wrapping(self) -> None:
+        """The independent audit's own re-verification of round one's fix (the
+        punctuation-stripping-plus-URL-detection version) found this could still be broken: neither
+        a backtick nor a plain double quote was in that version's trailing-punctuation set, so a
+        model wrapping its answer in either, a common way to set off an identifier in generated
+        text, left the wrapping characters attached to a key evidence was never stored under. The
+        pattern-search version fixes this for the same reason it fixes every other wrapping: a
+        quote or backtick isn't hostname-shaped, so the search simply never includes it in the
+        match."""
+        assert Source.domain_only('"en.wikipedia.org"') == "en.wikipedia.org"
+        assert Source.domain_only("`en.wikipedia.org`") == "en.wikipedia.org"

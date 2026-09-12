@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from osint_harness.bench.case import Benchmark, BenchmarkCase, CaseTrap, DefensibleConfidence
 from osint_harness.domain.analysis import Judgment
@@ -21,7 +21,7 @@ from osint_harness.graph.schemas import (
 )
 from osint_harness.investigator import Investigator
 from osint_harness.memory.archive import InvestigationArchive, SourceRegister
-from osint_harness.model.client import ScriptedModel
+from osint_harness.model.client import ModelClient, ModelUnavailableError, ScriptedModel, Usage
 from osint_harness.sources.cassette import Cassette, CassetteMode
 from osint_harness.sources.tools import Tool
 
@@ -94,6 +94,7 @@ class Fixtures:
             model=model,
             encyclopedia=SingleDocumentSource((cls.document(),)),
             pages=SingleDocumentSource(()),
+            web_search=SingleDocumentSource(()),
             archive=archive if archive is not None else InvestigationArchive(),
             register=register if register is not None else SourceRegister(),
         )
@@ -192,6 +193,141 @@ class TestGroundTruthContainment:
 
         assert "subject" in signature
         assert "BenchmarkCase" not in str(signature)
+
+
+class FailingModel(ModelClient):
+    """A model that always fails, so a mid-episode crash can be exercised without a real network."""
+
+    def decide[T: BaseModel](
+        self, purpose: str, _system: str, _prompt: str, _schema: type[T]
+    ) -> T:
+        raise ModelUnavailableError(f"simulated outage during {purpose}")
+
+
+class FailsAfterChargingModel(ModelClient):
+    """Mimics `LiveModel`'s real failure shape: usage is charged as soon as a reply is parsed,
+    before validation can reject it, so a billed call that failed is not a free one."""
+
+    COST_PER_CALL = Usage(input_tokens=500, output_tokens=200)
+
+    def decide[T: BaseModel](
+        self, purpose: str, _system: str, _prompt: str, _schema: type[T]
+    ) -> T:
+        self._charge(self.COST_PER_CALL)
+        raise ModelUnavailableError(f"simulated malformed reply during {purpose}")
+
+
+class SucceedsOnceThenFailsModel(ModelClient):
+    """Answers Direction for real, then fails on the next call — charging first, like the live
+    client does — so the halt's token attribution can be tested past the very first call, where a
+    bug that double-counted or dropped already-recorded steps would otherwise hide."""
+
+    FIRST_CALL_COST = Usage(input_tokens=300, output_tokens=100)
+    FAILING_CALL_COST = Usage(input_tokens=500, output_tokens=200)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._calls = 0
+
+    def decide[T: BaseModel](
+        self, purpose: str, _system: str, _prompt: str, schema: type[T]
+    ) -> T:
+        self._calls += 1
+        if self._calls == 1:
+            self._charge(self.FIRST_CALL_COST)
+            reply = DirectionPlan(hypotheses=("It operates.", "It is dormant."))
+            assert isinstance(reply, schema)
+            return reply
+        self._charge(self.FAILING_CALL_COST)
+        raise ModelUnavailableError(f"simulated malformed reply during {purpose}")
+
+
+class TestInvestigatorSurvivesAModelFailure:
+    """The live path can genuinely fail now (network, malformed replies, rate limits). One bad
+    episode must halt with a tag and stay scoreable, not raise and take an entire sweep down with
+    it — the guideline that a crashed episode stays in the denominator only holds if the crash is
+    actually caught somewhere."""
+
+    def _investigator(self) -> Investigator:
+        return Investigator(
+            model=FailingModel(),
+            encyclopedia=SingleDocumentSource(()),
+            pages=SingleDocumentSource(()),
+            web_search=SingleDocumentSource(()),
+            archive=InvestigationArchive(),
+            register=SourceRegister(),
+        )
+
+    def test_a_model_failure_mid_episode_halts_rather_than_raising(self) -> None:
+        investigation = self._investigator().investigate(
+            run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
+        )
+
+        assert investigation.phase is InvestigationPhase.HALTED
+        assert "halted" in investigation.steps[-1].reason
+
+    def test_a_halted_episode_is_still_committed_to_memory(self) -> None:
+        archive = InvestigationArchive()
+        register = SourceRegister()
+        Investigator(
+            model=FailingModel(),
+            encyclopedia=SingleDocumentSource(()),
+            pages=SingleDocumentSource(()),
+            web_search=SingleDocumentSource(()),
+            archive=archive,
+            register=register,
+        ).investigate(run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT)
+
+        assert "r1" in archive.episodes
+
+    def test_the_halt_claims_whatever_the_failing_call_itself_spent(self) -> None:
+        """An independent audit found the first version of this halt recorded zero tokens for a
+        call that had genuinely been charged before it failed — exactly `LiveModel`'s real shape,
+        where usage is charged as soon as a reply is parsed, before validation can reject it."""
+        model = FailsAfterChargingModel()
+
+        investigation = Investigator(
+            model=model,
+            encyclopedia=SingleDocumentSource(()),
+            pages=SingleDocumentSource(()),
+            web_search=SingleDocumentSource(()),
+            archive=InvestigationArchive(),
+            register=SourceRegister(),
+        ).investigate(run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT)
+
+        assert investigation.phase is InvestigationPhase.HALTED
+        halted_step = investigation.steps[-1]
+        assert halted_step.input_tokens == FailsAfterChargingModel.COST_PER_CALL.input_tokens
+        assert halted_step.output_tokens == FailsAfterChargingModel.COST_PER_CALL.output_tokens
+        assert investigation.token_cost() == model.spent().total()
+
+    def test_the_halt_attributes_only_the_failing_calls_own_spend_not_earlier_steps_too(
+        self,
+    ) -> None:
+        """The fix reads cumulative spend minus what earlier successful steps already claimed.
+        Proven only by a failure on a call that is NOT the first, where a version that summed the
+        whole cumulative total into the halt step would double-count Direction's own tokens."""
+        model = SucceedsOnceThenFailsModel()
+
+        investigation = Investigator(
+            model=model,
+            encyclopedia=SingleDocumentSource(()),
+            pages=SingleDocumentSource(()),
+            web_search=SingleDocumentSource(()),
+            archive=InvestigationArchive(),
+            register=SourceRegister(),
+        ).investigate(run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT)
+
+        assert investigation.phase is InvestigationPhase.HALTED
+        direction_step, halted_step = investigation.steps[0], investigation.steps[-1]
+        assert direction_step.input_tokens == (
+            SucceedsOnceThenFailsModel.FIRST_CALL_COST.input_tokens
+        )
+        assert halted_step.input_tokens == SucceedsOnceThenFailsModel.FAILING_CALL_COST.input_tokens
+        assert halted_step.output_tokens == (
+            SucceedsOnceThenFailsModel.FAILING_CALL_COST.output_tokens
+        )
+        assert investigation.token_cost() == model.spent().total()
 
 
 class TestInvestigator:
