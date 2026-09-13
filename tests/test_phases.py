@@ -364,6 +364,13 @@ class TestReconciliation:
         assert investigation.latest_assessment().probability <= 0.5
 
     def test_calls_referring_to_things_that_do_not_exist_are_discarded(self) -> None:
+        """Found live: this test set up exactly the scenario that broke, strong evidence with
+        every call discarded, and stopped at checking the mechanical fact (0 applied) without
+        checking the property that actually mattered, whether the resulting verdict was trustworthy.
+        It was not: `_defensible` only checked evidence weight, so a model's own confident
+        `judgment`/`probability` sailed through untouched even with zero real ACH judgments behind
+        it, on a real run against a real free model. Both assertions now stand, the second is the
+        one that would have caught it."""
         investigation = self._evidenced(InformationCredibility.CONFIRMED)
         model = ScriptedModel()
         model.script(
@@ -384,6 +391,25 @@ class TestReconciliation:
         transition = Reconciliation(model).advance(investigation)
 
         assert "scored 0" in transition.reason
+        assert investigation.latest_assessment().judgment is Judgment.INSUFFICIENT_EVIDENCE
+        assert investigation.latest_assessment().probability <= 0.5
+
+    def test_an_empty_calls_list_is_the_same_gap_as_calls_that_do_not_exist(self) -> None:
+        """The exact shape a live run actually produced: `calls=()` outright rather than calls
+        referring to bogus indices, same root cause, same fix, worth its own case since an empty
+        tuple and a tuple of unresolvable references are different inputs even if they should
+        reach the same verdict."""
+        investigation = self._evidenced(InformationCredibility.CONFIRMED)
+        model = ScriptedModel()
+        model.script(
+            "reconciliation",
+            ReconciliationResult(calls=(), judgment=Judgment.REFUTED, probability=0.9),
+        )
+
+        Reconciliation(model).advance(investigation)
+
+        assert investigation.latest_assessment().judgment is Judgment.INSUFFICIENT_EVIDENCE
+        assert investigation.latest_assessment().leading_hypothesis == ""
 
 
 class TestReflection:
@@ -505,8 +531,28 @@ class TestFullCycle:
         model.script("direction", DirectionPlan(hypotheses=("Acme operates.", "Acme is dormant.")))
         model.script("collection", CollectionPlan(encyclopedia_lookups=("Acme Corp",)))
         model.script("appraisal", Episode.strong_appraisal(InformationCredibility.CONFIRMED))
+        # The reconciliation call must actually reference the one piece of evidence appraisal
+        # above will extract, or a real defect this project shipped once already recurs: a
+        # verdict this test never checked because it was, itself, backed by nothing.
+        evidence_id = Evidence(
+            assertion="Acme filed accounts for 2024.",
+            document_url=Episode.ARTICLE,
+            source_domain="reuters.com",
+            credibility=InformationCredibility.CONFIRMED,
+        ).identifier
         model.script(
-            "reconciliation", ReconciliationResult(judgment=Judgment.SUPPORTED, probability=0.82)
+            "reconciliation",
+            ReconciliationResult(
+                calls=(
+                    ConsistencyCall(
+                        hypothesis_index=0,
+                        evidence_id=evidence_id,
+                        consistency=Consistency.CONSISTENT,
+                    ),
+                ),
+                judgment=Judgment.SUPPORTED,
+                probability=0.82,
+            ),
         )
         model.script("reflection", ReflectionResult(ready_to_conclude=True))
         model.script(

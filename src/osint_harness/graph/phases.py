@@ -323,7 +323,7 @@ class Reconciliation(Phase):
             applied += 1
 
         leading = investigation.leading_hypothesis()
-        judgment, probability = self._defensible(investigation, result)
+        judgment, probability = self._defensible(investigation, result, leading)
         investigation.assess(
             Assessment(
                 judgment=judgment,
@@ -339,10 +339,21 @@ class Reconciliation(Phase):
         )
 
     def _defensible(
-        self, investigation: Investigation, result: ReconciliationResult
+        self, investigation: Investigation, result: ReconciliationResult, leading: str
     ) -> tuple[Judgment, float]:
-        """Refuse a conclusive verdict the gathered evidence cannot actually carry."""
-        if not investigation.has_sufficient_evidence():
+        """Refuse a conclusive verdict the gathered evidence cannot actually carry.
+
+        Two separate ways a verdict can be undeserved, and a live run found the second one this
+        did not yet check: not enough evidence gathered at all (`has_sufficient_evidence`, the
+        original guard), or evidence gathered but never actually scored against any hypothesis.
+        `leading` empty means every hypothesis is still untested, `Investigation.leading_hypothesis`
+        returns "nothing if none has been tested yet". Evidence weight alone cannot tell those
+        apart: a model can write a well-reasoned `judgment` and `probability` while returning an
+        empty `calls` list in the very same response, and 29 well-graded but never-linked pieces of
+        evidence clear the weight bar easily. Without this check that free-text verdict sailed
+        through unexamined, backed by nothing the ACH matrix actually recorded, on a real live run.
+        """
+        if not investigation.has_sufficient_evidence() or not leading:
             return (Judgment.INSUFFICIENT_EVIDENCE, min(result.probability, 0.5))
         return (result.judgment, result.probability)
 
