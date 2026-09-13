@@ -401,3 +401,22 @@ interaction between slices, a test that asserts on an intermediate value will ha
 actual property it's supposed to guard is false, and a fix is a change like any other, so it needs
 its own audit too. I was wrong about the citation guarantee twice in a row, and both mistakes are
 sitting right there in the code, each with a test that names exactly what went wrong.
+
+That third lesson kept being true after the gate closed. A live run against the hosted demo (not the
+CLI, a real visitor clicking Investigate) produced a confident `refuted` verdict at 90% for a case
+whose own trap is "none", the floor case a well-documented company should pass easily. The Competing
+Hypotheses table underneath it showed every single hypothesis at zero disconfirming weight, zero
+supporting weight, not tested. Reconciliation's own step log said it plainly: "scored 0
+evidence-hypothesis pairs." The model had written a well-reasoned paragraph citing real evidence
+while returning an empty judgments array in the very same reply, and nothing caught the mismatch,
+because the guard that was supposed to refuse an unsupported verdict, `has_sufficient_evidence`, only
+ever checked the Admiralty-graded weight of the raw evidence gathered, never whether any of it had
+actually been scored against a hypothesis. Twenty-nine well-graded, never-linked assertions cleared
+that bar easily. The existing test for this exact code path had already set up the failing shape,
+strong evidence, every reconciliation call discarded, and stopped at asserting the mechanical fact
+(zero calls applied) without ever asserting the one thing that mattered, what the final verdict
+became. Fixed by requiring a leading hypothesis to actually exist, not just enough evidence weight,
+before a conclusive judgment is allowed to stand; both the extended test and a second one reproducing
+the exact live shape (`calls=()` outright) fail against the old code and pass against the fix. The
+offline benchmark is untouched, byte-for-byte, because the rehearsed analyst never had a leading
+hypothesis to offer in the first place.
