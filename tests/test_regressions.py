@@ -564,3 +564,44 @@ class TestAGradingSurvivesWhateverTheModelWritesInDomain:
         match."""
         assert Source.domain_only('"en.wikipedia.org"') == "en.wikipedia.org"
         assert Source.domain_only("`en.wikipedia.org`") == "en.wikipedia.org"
+
+    def test_domain_only_never_returns_empty(self) -> None:
+        """Every caller of this keys a `min_length=1` field with the result. Text that strips to
+        nothing (all whitespace) used to return an empty string right past that guarantee; found
+        live, the hard way, not by an audit this time, see the class below."""
+        assert Source.domain_only("   ") == "unknown"
+        assert Source.domain_only("") == "unknown"
+
+    def test_a_malformed_assertion_url_still_grades_its_evidence(self) -> None:
+        """Found by actually running the live path a second time: the model wrote a real,
+        well-formed assertion, but wrote its citation as a scheme-less domain-plus-path instead of
+        the exact retrieved URL it was quoting. `Source.registrable_domain`, used to derive the
+        evidence's `source_domain` at the time, has no fallback for text that is not already a
+        parseable absolute URL, so `urlparse(...).netloc` came back empty and construction of the
+        `Evidence` itself raised, crashing the whole investigation instead of just being refused as
+        an ungrounded citation, which is what a citation not matching a retrieved document should
+        do. Fixed by deriving `source_domain` with `Source.domain_only`, the same tool already used
+        for the grading domain field above, since this is the identical failure class: free text a
+        model wrote, not a URL this code fetched itself."""
+        investigation = Investigation.open(
+            run_id="r1", subject=Company(name="Acme Corp"), memory_mode=MemoryMode.SHORT
+        )
+        investigation.record_document(Episode.document())
+        model = ScriptedModel()
+        model.script(
+            "appraisal",
+            AppraisalResult(
+                assertions=(
+                    ExtractedAssertion(
+                        assertion=Episode.ASSERTION,
+                        document_url="reuters.com/a",
+                        credibility=InformationCredibility.CONFIRMED,
+                    ),
+                ),
+                gradings=(),
+            ),
+        )
+
+        transition = Appraisal(model).advance(investigation)
+
+        assert "refused 1 citing documents that were never retrieved" in transition.reason

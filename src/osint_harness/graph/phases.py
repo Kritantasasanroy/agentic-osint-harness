@@ -266,10 +266,17 @@ class Appraisal(Phase):
         recorded: list[str] = []
         ungrounded = 0
         for assertion in result.assertions:
+            # domain_only, not registrable_domain: this URL is free text the model wrote, the
+            # same failure class as the grading domain above, not a URL this code fetched itself.
+            # registrable_domain trusts urlparse to find a netloc and returns "" when the model
+            # wrote the URL with no scheme or with surrounding words, which crashed Evidence's own
+            # min_length=1 the first time a live run actually did that. Malformed here still fails
+            # to match a retrieved document below and gets refused as ungrounded either way; this
+            # only stops the malformed text from crashing construction before it gets that far.
             evidence = Evidence(
                 assertion=assertion.assertion,
                 document_url=assertion.document_url,
-                source_domain=Source.registrable_domain(assertion.document_url),
+                source_domain=Source.domain_only(assertion.document_url),
                 credibility=assertion.credibility,
                 rationale=assertion.rationale,
             )

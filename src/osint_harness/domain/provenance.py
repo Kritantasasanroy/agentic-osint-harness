@@ -94,10 +94,13 @@ class Source(BaseModel):
         across how a model phrases "here is a domain." If nothing hostname-shaped is found at all,
         the text is returned as-is (lowercased): a model returning pure garbage for this field is
         a different failure than mis-formatting a real answer, and no string transform fixes it.
+        The one exception is text that strips to nothing at all, which falls back to a literal
+        "unknown" rather than an empty string, since every caller of this keys a `min_length=1`
+        field with the result and a live run has already crashed on exactly that once.
         """
         match = cls._HOSTNAME.search(text)
         if match is None:
-            return text.strip().lower()
+            return text.strip().lower() or "unknown"
         return match.group(1).lower().removeprefix("www.")
 
     def regrade(self, reliability: SourceReliability, reason: str) -> None:
