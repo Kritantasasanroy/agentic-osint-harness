@@ -77,7 +77,10 @@ class Health(BaseModel):
 
 def _benchmark_source() -> Path:
     """The shipped benchmark, found whether this runs from the container image or a checkout."""
-    for candidate in (APP_DIR / "benchmark", APP_DIR.parents[1] / "benchmark"):
+    candidates = [APP_DIR / "benchmark"]
+    if len(APP_DIR.parents) > 1:
+        candidates.append(APP_DIR.parents[1] / "benchmark")
+    for candidate in candidates:
         if candidate.is_dir():
             return candidate
     raise RuntimeError("benchmark directory not found")
