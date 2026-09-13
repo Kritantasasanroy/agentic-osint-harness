@@ -7,6 +7,7 @@ the proxy in front of this service will hold one connection open, so every inves
 background job that the page polls while it works.
 """
 
+import logging
 import os
 import shutil
 import tempfile
@@ -22,11 +23,11 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from osint_harness.__main__ import Workspace
+from osint_harness.__main__ import Harness, Workspace
 from osint_harness.bench.case import BenchmarkCase
-from osint_harness.bench.outcome import BenchmarkRun, CaseOutcome
+from osint_harness.bench.outcome import CaseOutcome
 from osint_harness.domain.investigation import Budget, Investigation, MemoryMode
 from osint_harness.investigator import Investigator
 from osint_harness.memory.archive import InvestigationArchive, SourceRegister
@@ -136,6 +137,24 @@ class JobView(BaseModel):
     outcome: CaseOutcome | None = None
     record: Investigation | None = None
     markdown: str = ""
+
+    @model_validator(mode="after")
+    def _payload_matches_state(self) -> "JobView":
+        """A finished job carries its result, and an unfinished one cannot pretend to.
+
+        `state` and these nullable fields would otherwise encode the same fact twice, leaving
+        `DONE` with no outcome representable. This is the response model the browser consumes, and
+        the page dereferences the outcome directly once it sees a terminal state, so the invariant
+        is load-bearing on the consumer and belongs in the type rather than in a comment.
+        """
+        finished = self.state is JobState.DONE
+        if finished and (self.outcome is None or self.record is None):
+            raise ValueError("a finished job must carry its outcome and record")
+        if not finished and (self.outcome is not None or self.record is not None):
+            raise ValueError("only a finished job may carry an outcome or record")
+        if self.state is JobState.FAILED and not self.error:
+            raise ValueError("a failed job must say what went wrong")
+        return self
 
 
 class Started(BaseModel):
@@ -355,33 +374,28 @@ class HostedDemo:
         return job
 
     def ablation(self) -> AblationResponse:
-        """Compare all three memory arms, always replayed.
+        """Compare all three memory arms, always replayed, in a workspace of its own.
+
+        Two things this must not do, learned the hard way from an audit. It runs through
+        `Harness.sweep`, the same code path the CLI uses, rather than a second sweep loop written
+        here: an earlier version hand-rolled one that never persisted the archive between cases, so
+        the `long` arm recalled nothing and reported 0% harmful retrieval where the CLI reports 14%,
+        publishing a flat contradiction of the project's own headline result.
+
+        And it gets its own workspace, because a sweep clears long-term memory before each arm while
+        the demo's shared archive is exactly what visitors' live investigations accumulate into. One
+        visitor asking for an ablation must not wipe everyone's memory, and a sweep must not pick up
+        an investigation that happened to finish midway through it.
 
         Never live, and that is the design rather than a saving: the comparison is only valid when
         every arm sees byte-identical retrieval, so running it against a live model would measure
         the web changing between arms rather than memory.
         """
-        cases = self._workspace.benchmark().cases
-        runs = []
-        for mode in MemoryMode:
-            self._workspace.forget(mode)
-            outcomes = []
-            for case in cases:
-                investigation = self._replayed(case, mode)
-                outcomes.append(CaseOutcome.scored(investigation, case))
-            runs.append(BenchmarkRun(memory_mode=mode, outcomes=tuple(outcomes)))
+        workspace = _workspace()
+        harness = Harness(workspace, live=False, record=False, model="replay")
+        cases = workspace.benchmark().cases
+        runs = [harness.sweep(cases, mode, Budget()) for mode in MemoryMode]
         return AblationResponse(markdown=Ablation(runs=tuple(runs)).as_markdown())
-
-    def _replayed(self, case: BenchmarkCase, memory: MemoryMode) -> Investigation:
-        """One offline episode, used by the ablation where live runs would invalidate it."""
-        cassette = Cassette.load(self._workspace.cassette_path(), CassetteMode.REPLAY)
-        investigator = self._investigator(RehearsedModel(), cassette, memory)
-        return investigator.investigate(
-            run_id=f"{case.case_id}-{memory.value}",
-            subject=case.subject,
-            memory_mode=memory,
-            budget=Budget(),
-        )
 
     def _investigator(
         self, model: ModelClient, cassette: Cassette, memory: MemoryMode
@@ -425,6 +439,7 @@ class HostedDemo:
                 markdown=Dossier(investigation).as_markdown(),
             )
         except Exception as failure:
+            logging.exception("investigation %s failed", job.identifier())
             job.failed(f"{type(failure).__name__}: {failure}")
 
     def _remember(self, job: Job) -> None:

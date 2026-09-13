@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Agentic OSINT Harness</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@13.0.3/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <style>
   :root {
     --bg: #0a0c11;
@@ -240,7 +241,11 @@ function renderMetrics(o, live) {
 }
 
 function renderReport(markdown) {
-  reportBody.innerHTML = marked.parse(markdown);
+  // The dossier quotes text from pages the agent fetched off live search results, so it is
+  // untrusted input. marked ships no sanitiser, and injected markup could change what the report
+  // appears to say while the JSON record stays clean, which is the one thing this project cannot
+  // let happen.
+  reportBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
   reportPanel.classList.remove("hidden");
 }
 
@@ -275,11 +280,24 @@ async function runInvestigation() {
 
   if (started.note) showNote(started.note);
 
+  let misses = 0;
   polling = setInterval(async () => {
     let job;
     try {
-      job = await (await fetch(`${API}/api/jobs/${started.job_id}`)).json();
+      const res = await fetch(`${API}/api/jobs/${started.job_id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      job = await res.json();
+      misses = 0;
     } catch (err) {
+      // One failed tick is nothing: the next one retries an idempotent read. A run of them means
+      // the backend is gone (it restarts on idle, and long jobs can age out of its memory), and
+      // leaving the page on a frozen phase with the controls disabled would strand the user.
+      if (++misses < 5) return;
+      clearInterval(polling);
+      polling = null;
+      setBusy(false);
+      railEl.classList.add("hidden");
+      setStatus(`Lost contact with the backend (${err.message}). Reload to start again.`, true);
       return;
     }
     if (job.state === "running") {
