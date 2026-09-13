@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agentic OSINT Harness</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@13.0.3/marked.min.js"></script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --border: #262b36;
+    --text: #e6e9ef;
+    --dim: #9aa3b2;
+    --accent: #6ea8fe;
+    --good: #4caf7d;
+    --bad: #e0665e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 20px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin: 0 0 28px; font-size: 0.95rem; }
+  .sub a { color: var(--accent); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  select, button {
+    font: inherit;
+    padding: 9px 14px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: #1a1e27;
+    color: var(--text);
+  }
+  select { min-width: 260px; flex: 1; }
+  button {
+    background: var(--accent);
+    color: #061018;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: #1a1e27; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  .meta { display: flex; gap: 18px; flex-wrap: wrap; margin: 16px 0; font-size: 0.9rem; }
+  .meta b { color: var(--text); }
+  .meta span { color: var(--dim); }
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 99px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .badge.ok { background: rgba(76,175,125,0.15); color: var(--good); }
+  .badge.miss { background: rgba(224,102,94,0.15); color: var(--bad); }
+  #status { color: var(--dim); font-size: 0.9rem; min-height: 1.2em; margin-top: 10px; }
+  #status.err { color: var(--bad); }
+  .report { display: none; }
+  .report :is(h1,h2,h3) { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .report table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.92rem; }
+  .report th, .report td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .report code { background: #1a1e27; padding: 1px 5px; border-radius: 4px; }
+  footer { color: var(--dim); font-size: 0.85rem; margin-top: 40px; text-align: center; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Agentic OSINT Harness</h1>
+  <p class="sub">
+    An autonomous investigator: pick a subject, watch it search, grade sources, weigh competing
+    hypotheses, and hand back a cited report. Runs replayed from a recorded cassette, so this is a
+    real investigation, not a canned response, just no live network call and no API key needed.
+    <a href="https://github.com/Kritantasasanroy/agentic-osint-harness" target="_blank">Source</a>.
+  </p>
+
+  <div class="panel">
+    <div class="row">
+      <select id="caseSelect"><option>loading cases...</option></select>
+      <select id="memorySelect">
+        <option value="none">memory: none</option>
+        <option value="short" selected>memory: short</option>
+        <option value="long">memory: long</option>
+      </select>
+      <button id="runBtn">Investigate</button>
+      <button id="ablateBtn" class="secondary">Run full ablation (all 14 cases)</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div class="panel report" id="metaPanel">
+    <div class="meta" id="metaRow"></div>
+  </div>
+
+  <div class="panel report" id="reportPanel">
+    <div id="reportBody"></div>
+  </div>
+</div>
+
+<footer>
+  Backend cold-starts after 15 minutes idle (Render free tier); the first request can take
+  30&ndash;60s to wake it up.
+</footer>
+
+<script>
+const API = "https://osint-harness-api.onrender.com";
+
+const caseSelect = document.getElementById("caseSelect");
+const memorySelect = document.getElementById("memorySelect");
+const runBtn = document.getElementById("runBtn");
+const ablateBtn = document.getElementById("ablateBtn");
+const statusEl = document.getElementById("status");
+const metaPanel = document.getElementById("metaPanel");
+const metaRow = document.getElementById("metaRow");
+const reportPanel = document.getElementById("reportPanel");
+const reportBody = document.getElementById("reportBody");
+
+function setStatus(text, isError) {
+  statusEl.textContent = text || "";
+  statusEl.classList.toggle("err", Boolean(isError));
+}
+
+function setBusy(busy) {
+  runBtn.disabled = busy;
+  ablateBtn.disabled = busy;
+  caseSelect.disabled = busy;
+  memorySelect.disabled = busy;
+}
+
+async function loadCases() {
+  try {
+    const res = await fetch(`${API}/api/cases`);
+    if (!res.ok) throw new Error(`cases: HTTP ${res.status}`);
+    const cases = await res.json();
+    caseSelect.innerHTML = cases
+      .map((c) => `<option value="${c.case_id}">${c.subject} (${c.trap})</option>`)
+      .join("");
+    setStatus(`${cases.length} benchmark cases loaded.`);
+  } catch (err) {
+    setStatus(
+      "Backend is waking up (Render free tier sleeps when idle) or unreachable. Retrying...",
+      true
+    );
+    setTimeout(loadCases, 4000);
+  }
+}
+
+function showMeta(outcome) {
+  const correct = outcome.correct;
+  metaRow.innerHTML = `
+    <div><b>Verdict:</b> ${outcome.reached} <span class="badge ${correct ? "ok" : "miss"}">${
+    correct ? "matched expected" : "expected " + outcome.expected
+  }</span></div>
+    <div><b>Confidence:</b> ${(outcome.probability * 100).toFixed(0)}%</div>
+    <div><b>Brier:</b> ${outcome.brier.toFixed(3)}</div>
+    <div><b>Steps:</b> ${outcome.steps_taken}</div>
+    <div><b>Tool calls:</b> ${outcome.tool_calls}</div>
+    <div><b>Tokens:</b> ${outcome.tokens}</div>
+    <div><b>Failure tag:</b> ${outcome.failure}</div>
+  `;
+  metaPanel.style.display = "block";
+}
+
+function showReport(markdown) {
+  reportBody.innerHTML = marked.parse(markdown);
+  reportPanel.style.display = "block";
+}
+
+async function runInvestigation() {
+  setBusy(true);
+  metaPanel.style.display = "none";
+  reportPanel.style.display = "none";
+  setStatus("Running the investigation (six phases, replayed from cassette)...");
+  try {
+    const res = await fetch(`${API}/api/investigate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ case_id: caseSelect.value, memory: memorySelect.value }),
+    });
+    if (!res.ok) throw new Error(`investigate: HTTP ${res.status}`);
+    const data = await res.json();
+    showMeta(data.outcome);
+    showReport(data.markdown);
+    setStatus("Done.");
+  } catch (err) {
+    setStatus(`Failed: ${err.message}`, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function runAblation() {
+  setBusy(true);
+  metaPanel.style.display = "none";
+  reportPanel.style.display = "none";
+  setStatus("Running all 14 cases across all 3 memory modes...");
+  try {
+    const res = await fetch(`${API}/api/ablation`);
+    if (!res.ok) throw new Error(`ablation: HTTP ${res.status}`);
+    const data = await res.json();
+    showReport(data.markdown);
+    setStatus("Done.");
+  } catch (err) {
+    setStatus(`Failed: ${err.message}`, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+runBtn.addEventListener("click", runInvestigation);
+ablateBtn.addEventListener("click", runAblation);
+loadCases();
+</script>
+</body>
+</html>
