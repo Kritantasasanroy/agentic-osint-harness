@@ -43,6 +43,31 @@ osint-harness --live --record ablate
 
 ---
 
+## Or just watch it run, live, no setup at all
+
+I put a hosted version up too: [frontend](https://agentic-osint-harness-kritantasasanroys-projects.vercel.app),
+backed by a [FastAPI service](https://osint-harness-api.onrender.com/docs) running the actual
+package (`web/backend/`, `web/frontend/`, separate from the graded submission itself).
+
+Every investigation you start there is real. A live model, live search, live page retrieval, the
+whole six-phase loop, while you watch a phase rail move through it. There's no rehearsed stand-in
+anywhere on that path, and that's not just a setting I left on, the request type it accepts has no
+field to ask for anything else, and the one place a fallback used to live got deleted along with it.
+Can't run it live right now (no key configured, or the shared daily allowance is spent) means the
+request gets refused outright, with the reason stated plainly, never quietly satisfied some other
+way. A run takes a few minutes and about a dozen model calls, shared across whoever's visiting that
+day, so don't be surprised if it says the allowance is gone, that's the real free tier, not a demo
+limit I invented.
+
+One button on that page stays offline on purpose: the memory ablation, comparing `none`/`short`/`long`
+across all 14 cases. Making that live would actually make it worse, not more honest, since the whole
+comparison only means something if every arm sees identical retrieval. A live run would measure the
+web changing between arms instead of memory doing anything, which is exactly the mistake decision #3
+below explains. It replays the same recorded pages the CLI's own published numbers are audited
+against, so what you see there is real data, just deliberately not live data.
+
+---
+
 ## How it works
 
 Six phases, named after the stages of the intelligence cycle, wired together as a state machine:

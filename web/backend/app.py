@@ -1,10 +1,17 @@
 """HTTP surface for the hosted demo.
 
-Two problems the CLI never has to solve. A public endpoint sits in front of a metered API key, so
-live calls get claimed from a shared daily allowance rather than trusted to whoever is calling. And
-a real multi-phase investigation against a live model takes minutes, far longer than a browser or
-the proxy in front of this service will hold one connection open, so every investigation runs as a
-background job that the page polls while it works.
+Every investigation this serves is real: a live model, live search, live retrieval. There is no
+rehearsed or replayed stand-in anywhere on this path, and none of its types can represent one — see
+`InvestigateRequest` and `_carry_out` below. Three problems that follows from, which the CLI never
+has to solve. A public endpoint sits in front of a metered API key, so live calls get claimed from a
+shared daily allowance rather than trusted to whoever is calling, and a request the allowance cannot
+honour is refused outright rather than quietly downgraded to something else. A real multi-phase
+investigation against a live model takes minutes, far longer than a browser or the proxy in front of
+this service will hold one connection open, so every investigation runs as a background job that the
+page polls while it works. And the one exception on this whole surface, the memory ablation, is
+deliberately never live at all: comparing memory modes is only valid when every arm sees
+byte-identical retrieval, so it always replays the same recorded cassette the CLI itself is audited
+against, which is a controlled measurement, not a dummy stand-in for the real thing.
 """
 
 import logging
@@ -33,7 +40,6 @@ from osint_harness.investigator import Investigator
 from osint_harness.memory.archive import InvestigationArchive, SourceRegister
 from osint_harness.model.client import ModelClient, ModelUnavailableError, Usage
 from osint_harness.model.live import DEFAULT_MODEL, LiveModel
-from osint_harness.rehearsal import RehearsedModel
 from osint_harness.report.ablation import Ablation
 from osint_harness.report.dossier import Dossier
 from osint_harness.sources.cassette import Cassette, CassetteMode
@@ -128,11 +134,9 @@ class JobView(BaseModel):
 
     id: str
     state: JobState
-    live: bool
     phase: str
     calls_made: int
     elapsed_seconds: float
-    note: str = ""
     error: str = ""
     outcome: CaseOutcome | None = None
     record: Investigation | None = None
@@ -161,16 +165,19 @@ class Started(BaseModel):
     """The handle a caller polls after asking for an investigation."""
 
     job_id: str
-    live: bool
-    note: str = ""
 
 
 class InvestigateRequest(BaseModel):
-    """One case to investigate, under one memory mode, live or replayed."""
+    """One case to investigate live, under one memory mode.
+
+    There is no `live` flag here to turn off. Every investigation this starts is real: a live
+    model, live search, live retrieval. A request this demo cannot honour live (no key configured,
+    or today's allowance spent) is refused outright by `HostedDemo.start`, not silently downgraded
+    to a rehearsed stand-in that never reasons.
+    """
 
     case_id: str = Field(min_length=1)
     memory: MemoryMode = MemoryMode.SHORT
-    live: bool = True
 
 
 class AblationResponse(BaseModel):
@@ -197,15 +204,13 @@ class Job:
     so progress needs no change to the graph engine itself.
     """
 
-    def __init__(self, job_id: str, live: bool) -> None:
+    def __init__(self, job_id: str) -> None:
         self._lock = threading.Lock()
         self._id = job_id
-        self._live = live
         self._state = JobState.RUNNING
         self._phase = "starting"
         self._calls = 0
         self._started = time.monotonic()
-        self._note = ""
         self._error = ""
         self._outcome: CaseOutcome | None = None
         self._record: Investigation | None = None
@@ -220,11 +225,6 @@ class Job:
         with self._lock:
             self._phase = purpose
             self._calls += 1
-
-    def noted(self, note: str) -> None:
-        """Attach something the caller should know about how this ran."""
-        with self._lock:
-            self._note = note
 
     def succeeded(self, outcome: CaseOutcome, record: Investigation, markdown: str) -> None:
         """Record the finished investigation."""
@@ -247,11 +247,9 @@ class Job:
             return JobView(
                 id=self._id,
                 state=self._state,
-                live=self._live,
                 phase=self._phase,
                 calls_made=self._calls,
                 elapsed_seconds=round(time.monotonic() - self._started, 1),
-                note=self._note,
                 error=self._error,
                 outcome=self._outcome,
                 record=self._record,
@@ -331,39 +329,36 @@ class HostedDemo:
         return [CaseSummary.of(case) for case in self._workspace.benchmark().cases]
 
     def start(self, request: InvestigateRequest, visitor: str) -> Started:
-        """Queue an investigation, degrading to replay when a live run cannot be honoured."""
+        """Queue a live investigation, or refuse the request outright if one cannot be honoured.
+
+        There is no degraded mode to fall back to here. A request this demo cannot run live is
+        rejected with a clear reason before any job exists, rather than started and left to fail,
+        or quietly satisfied some other way.
+        """
         benchmark = self._workspace.benchmark()
         if request.case_id not in benchmark.identifiers():
             raise HTTPException(status_code=404, detail=f"no such case: {request.case_id}")
         case = benchmark.case(request.case_id)
 
-        live, note = self._live_decision(request.live, visitor)
-        job = Job(job_id=uuid.uuid4().hex[:12], live=live)
-        if note:
-            job.noted(note)
-        self._remember(job)
-        self._runner.submit(self._carry_out, job, case, request.memory, live, visitor)
-        return Started(job_id=job.identifier(), live=live, note=note)
-
-    def _live_decision(self, wanted: bool, visitor: str) -> tuple[bool, str]:
-        """Whether this run can be live, and what to tell the caller when it cannot."""
-        if not wanted:
-            return (False, "")
         if not self.live_is_configured():
-            return (False, "No API key is configured on this instance, so this ran offline.")
+            raise HTTPException(
+                status_code=503, detail="no API key is configured on this instance"
+            )
         if self._allowance.remaining() <= 0:
-            return (
-                False,
-                "The demo's shared daily allowance of live calls is spent, so this ran offline. "
-                "It resets at midnight UTC.",
+            raise HTTPException(
+                status_code=503,
+                detail="today's shared allowance of live calls is spent; it resets at midnight UTC",
             )
         if self._allowance.remaining_for(visitor) <= 0:
-            return (
-                False,
-                "You have used your share of today's live calls, so this ran offline. "
-                "It resets at midnight UTC.",
+            raise HTTPException(
+                status_code=503,
+                detail="you have used your share of today's live calls; it resets at midnight UTC",
             )
-        return (True, "")
+
+        job = Job(job_id=uuid.uuid4().hex[:12])
+        self._remember(job)
+        self._runner.submit(self._carry_out, job, case, request.memory, visitor)
+        return Started(job_id=job.identifier())
 
     def job(self, job_id: str) -> Job:
         """One job by its handle."""
@@ -411,25 +406,24 @@ class HostedDemo:
         )
 
     def _carry_out(
-        self, job: Job, case: BenchmarkCase, memory: MemoryMode, live: bool, visitor: str
+        self, job: Job, case: BenchmarkCase, memory: MemoryMode, visitor: str
     ) -> None:
-        """Run one investigation to completion, recording whatever it produced."""
+        """Run one live investigation to completion, recording whatever it produced.
+
+        Every piece here is real: `CassetteMode.RECORD` lets search and page fetches reach the
+        actual network, and `HostedModel` wraps the real `LiveModel`, never a rehearsed stand-in.
+        """
         try:
-            cassette = Cassette.load(
-                self._workspace.cassette_path(),
-                CassetteMode.RECORD if live else CassetteMode.REPLAY,
-            )
-            model: ModelClient = (
-                HostedModel(LiveModel(model=self._model_id), self._allowance, visitor, job)
-                if live
-                else RehearsedModel()
+            cassette = Cassette.load(self._workspace.cassette_path(), CassetteMode.RECORD)
+            model: ModelClient = HostedModel(
+                LiveModel(model=self._model_id), self._allowance, visitor, job
             )
             investigator = self._investigator(model, cassette, memory)
             investigation = investigator.investigate(
                 run_id=f"{case.case_id}-{memory.value}-{job.identifier()}",
                 subject=case.subject,
                 memory_mode=memory,
-                budget=Budget(max_steps=self.LIVE_STEP_CEILING) if live else Budget(),
+                budget=Budget(max_steps=self.LIVE_STEP_CEILING),
             )
             investigator.archive().write_to(self._workspace.archive_path(memory))
             investigator.register().write_to(self._workspace.register_path(memory))
