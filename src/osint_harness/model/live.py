@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from osint_harness.model.client import ModelClient, ModelRefusedError, ModelUnavailableError, Usage
 
-DEFAULT_MODEL = "nex-agi/nex-n2.5-pro:free"
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 
 
 class ChatMessage(BaseModel):

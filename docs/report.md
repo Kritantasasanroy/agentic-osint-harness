@@ -102,20 +102,31 @@ tier is rate-limited, not metered (20 requests a minute, 50 a day with no credit
 calls to respect the per-minute ceiling. The daily ceiling can't be lifted from inside the harness at
 all, which is exactly why the live results below are a deliberately bounded run, not the full sweep.
 
-I picked the specific model (`nex-agi/nex-n2.5-pro:free`, overridable through `--model`) by checking
-OpenRouter's own catalogue directly. Good call, too: the research for this turned up a wall of
-confident-sounding blog rankings naming models that don't even appear in that catalogue at all. A
-small lesson of its own about trusting secondary sources for anything that changes fast. OpenRouter
-says plainly that its free lineup rotates without notice, which is exactly why the model id is a
-parameter, never a literal.
+I picked the model (overridable through `--model`) by checking OpenRouter's own catalogue directly.
+Good call, too: the research for this turned up a wall of confident-sounding blog rankings naming
+models that don't even appear in that catalogue at all. A small lesson of its own about trusting
+secondary sources for anything that changes fast. OpenRouter says plainly that its free lineup
+rotates without notice, which is exactly why the model id is a parameter, never a literal.
 
-Running it live surfaced something no offline test ever could. This model spends the large majority
-of its token budget on hidden chain-of-thought before it writes an answer (I measured 319 of 397
-completion tokens burned on a plain prompt). An unremarkable prompt exhausted the token ceiling on
-reasoning alone, before a single character of JSON got written. Invisible to `RehearsedModel` and
-`ScriptedModel`, since neither one reasons at all. The fix was two changes, and neither cost a cent on
-a $0 model: cap reasoning effort, and raise the output ceiling generously, since extra tokens only cost
-wall-clock time. The failure is now diagnosed by name instead of reported as a bare, useless silence.
+Running it live surfaced something no offline test ever could, and then surfaced it twice. My first
+pick, `nex-agi/nex-n2.5-pro:free`, spends the large majority of its token budget on hidden
+chain-of-thought before writing anything (I measured 319 of 397 completion tokens burned on a plain
+prompt). Capping reasoning effort and raising the output ceiling made short prompts work, so I
+considered it handled.
+
+It wasn't handled. On the heavier prompts deeper into an investigation, the ones carrying a full
+briefing of accumulated leads and hypotheses, the same model still burned its entire budget thinking
+and returned an empty completion, after sitting on the request for close to six minutes. Direction
+succeeded; Collection died every time. The capability flags in the catalogue said nothing about this,
+because the flags describe what a model accepts, not how it behaves under load.
+
+So I measured instead of guessing: I ran the real Collection prompt and schema through candidates
+directly. `nvidia/nemotron-3-super-120b-a12b:free` returned a correct, well-formed plan in **3.9
+seconds** against the same prompt that had cost the previous model 350 seconds and produced nothing.
+That is the default now. The generalisable finding is that "free model supporting structured output"
+is not a specification: two models with identical capability flags in one catalogue differed by two
+orders of magnitude on the only workload that mattered, and nothing short of running the real prompts
+through both would have revealed it.
 
 ### Search became a real tool, not a model capability
 

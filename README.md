@@ -196,24 +196,31 @@ it's enforced per account, not per key. `LiveModel` paces every call to stay und
 ceiling, but the daily ceiling is a hard wall I can't lift from code. That's exactly why the verified
 live results further down are a small, deliberate run, not the full 42-episode sweep.
 
-I picked the specific free model (`nex-agi/nex-n2.5-pro:free` by default, one line to swap) by
-checking OpenRouter's actual model listing directly, rather than trusting blog rankings. Good thing
-too: that research turned up a pile of programmatic SEO content confidently naming models that don't
-even appear in the real catalogue. OpenRouter says outright that the free lineup rotates without
-notice, free today, paid tomorrow, which is exactly why the model id is a constructor argument and a
-`--model` flag, never a hardcoded string.
+I picked the specific free model by checking OpenRouter's actual model listing directly, rather than
+trusting blog rankings. Good thing too: that research turned up a pile of programmatic SEO content
+confidently naming models that don't even appear in the real catalogue. OpenRouter says outright that
+the free lineup rotates without notice, free today, paid tomorrow, which is exactly why the model id
+is a constructor argument and a `--model` flag, never a hardcoded string.
 
-Running it live actually taught me something no mock ever could: this model burns the large majority
-of its token budget on hidden reasoning before it ever writes an answer (I watched it spend 319 of
-397 completion tokens on a genuinely simple prompt). Left alone, an unremarkable prompt would exhaust
-the token ceiling purely on reasoning, before the model wrote a single character of its JSON reply.
-That's a failure the fixed `RehearsedModel` and `ScriptedModel` tests could never show me, since
-neither one actually reasons. Two changes fixed it: capping reasoning effort (`reasoning: {"effort":
-"low"}`, a parameter this model happens to expose) and raising the output ceiling generously, since
-on a $0 model, generating more tokens costs time, not money. The failure is now diagnosed by name,
-something like "the model spent its budget on reasoning, raise max_tokens or lower reasoning effort",
-instead of a bare "no reply". I only added that clarity after the first time it happened and I had no
-idea why.
+That flag earned its keep faster than I expected. My first pick was `nex-agi/nex-n2.5-pro:free`, and
+running it live taught me something no mock ever could: it burns the large majority of its token
+budget on hidden reasoning before writing an answer (I watched it spend 319 of 397 completion tokens
+on a genuinely simple prompt). I capped reasoning effort and raised the output ceiling, which made
+short prompts work, and I thought that was the end of it.
+
+It wasn't. On the heavier prompts further into an investigation, the ones carrying a full briefing of
+leads and hypotheses, that model still spent its entire budget thinking and returned nothing, after
+sitting there for close to six minutes. Direction would succeed and Collection would die. So I went
+back to the catalogue and actually measured candidates against the real Collection schema instead of
+picking on reputation: `nvidia/nemotron-3-super-120b-a12b:free` answered the same prompt correctly in
+**3.9 seconds** where the old one had burned 350 and failed. That is now the default.
+
+The lesson I'd keep: "free model that supports JSON output" is not a specification. Two models with
+identical capability flags in the same catalogue differed by two orders of magnitude on the workload
+that actually mattered, and the only way to find that out was to run the real prompts through both.
+The failure is at least diagnosed by name now ("the model spent its budget on reasoning, raise
+max_tokens or lower reasoning effort") rather than a bare "no reply", which is what let me tell a bad
+model apart from a bug in my own code.
 
 ### 11. Search became its own tool, not something the model does for me
 
