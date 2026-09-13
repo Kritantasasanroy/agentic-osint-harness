@@ -24,7 +24,7 @@ pip install -e ".[dev]"
 osint-harness cases                                  # the 14 benchmark subjects and claims
 osint-harness investigate ada-lovelace-person        # one investigation, replayed offline
 osint-harness ablate                                 # all 14 cases x 3 memory modes, with a report
-pytest && mypy && ruff check .                       # 247 tests, strict types, clean lint
+pytest && mypy && ruff check .                       # 254 tests, strict types, clean lint
 ```
 
 Reports land in `runs/<case>-<memory>/findings.md`, and the ablation report in
@@ -37,7 +37,8 @@ and I explain why down in [Honest status](#honest-status-whats-actually-verified
 Want the real thing instead?
 
 ```bash
-export OPENROUTER_API_KEY=...
+export NVIDIA_API_KEY=...       # preferred: same model, direct, far higher throughput
+# or: export OPENROUTER_API_KEY=...
 osint-harness --live --record ablate
 ```
 
@@ -208,7 +209,7 @@ One related call: `INSUFFICIENT_EVIDENCE` is a judgment, not a hypothesis. A ref
 no actual claim, so it can't be disconfirmed by anything. Letting it sit in the ACH matrix would let
 "I don't know" quietly rack up consistency points against evidence it never engaged with.
 
-### 10. OpenRouter over one vendor's API, and why this specific model
+### 10. Two providers, one model, chosen by measurement rather than preference
 
 `ModelClient` genuinely only ever needed one thing from a provider: turn a prompt into valid,
 structured JSON. Nothing about the design depends on a specific lab, so I run the harness against
@@ -247,6 +248,22 @@ The failure is at least diagnosed by name now ("the model spent its budget on re
 max_tokens or lower reasoning effort") rather than a bare "no reply", which is what let me tell a bad
 model apart from a bug in my own code.
 
+Then that daily ceiling stopped being theoretical. Partway through verifying the hosted demo, a run
+came back with `Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model
+requests per day`. Fifty requests is about four full investigations, and a day of genuine testing had
+spent them. So `LiveModel` now speaks to **either** provider: NVIDIA serves the identical model
+directly, and it is preferred whenever `NVIDIA_API_KEY` is set, with OpenRouter kept as the fallback
+so nothing that already worked stops working. The difference is not subtle. OpenRouter's free tier
+forced a 3.5-second gap between calls to respect 20 a minute and then cut me off for the day; NVIDIA
+took eight back-to-back requests with no pacing at all in the same session, so its configured gap is
+0.5 seconds. Same model, same prompts, same JSON, roughly an order of magnitude more headroom.
+
+That is the provider neutrality this design claimed from the start finally being cashed in rather
+than asserted: switching cost one constructor argument and an environment variable, because
+`ModelClient` only ever wanted structured JSON and never cared who produced it. The one thing I did
+have to fix was honesty in the error path, since every failure message said "OpenRouter reported an
+error" regardless of who actually answered. It names the real provider now.
+
 ### 11. Search became its own tool, not something the model does for me
 
 No provider hands out server-side web search for free. Rather than build a special case into the
@@ -259,10 +276,26 @@ cassette-recorded and replayed offline exactly like every other retrieval, which
 before (the old model-driven search was either a live call to a provider or a scripted stand-in,
 nothing in between). `ModelClient` is down to exactly one method now, `decide()`, which is honestly
 just a cleaner statement of what a reasoning provider actually owes this harness in the first place.
-Scraping DuckDuckGo's HTML is fragile to markup changes, and that's by design of the approach, not an
-oversight on my part. I marked it with this project's own `ponytail:` convention: a deliberate
-ceiling with a named upgrade path, a paid search API, whenever reliability actually becomes the
-bottleneck.
+
+I originally backed that `Tool` with DuckDuckGo's keyless HTML front end and left a `ponytail:` note
+saying to swap in a real search API if reliability ever became the bottleneck. It became the
+bottleneck, in the most instructive way possible. Running the hosted demo showed every live
+investigation reaching exactly one source, Wikipedia, and reporting it as a clean run. The cause was
+not flaky markup: DuckDuckGo answers a self-identifying client with **HTTP 202 and a bot-challenge
+page** instead of results. 202 is a success code, so `raise_for_status` stayed silent, the parser
+found no results in a page that genuinely had none, and a totally blocked search reported itself as
+a search that simply found nothing. A browser User-Agent got 10 results from the same endpoint
+immediately, which told me exactly what was happening and also told me not to do that: spoofing a
+browser to get around a bot challenge is both fragile and not something I want in a submission.
+
+I measured GDELT's keyless API as the honest replacement and rejected it on evidence, not vibes: 429
+on roughly half of all calls even paced ten seconds apart, and 50 to 80 seconds per search once
+retries were counted. So `WebSearch` now uses Tavily with a real key. Live runs since go from one
+source to seven, across `bbc.com`, `bl.uk`, `nobelprize.org`, `justice.gov`, `pmc.ncbi.nlm.nih.gov`
+and others. The generalisable lesson is the one about 202: a success code with an empty body is a
+worse failure than an error, because nothing anywhere reports it. `WebSearch` now treats a reply
+that is not parseable results as an explicit failure, so a blocked search can never again look like
+an honest empty one.
 
 ---
 
@@ -287,7 +320,7 @@ moment that stops being true.
 
 ## Honest status: what's actually verified and what isn't
 
-**Verified, with commands you can run yourself:** 247 tests pass, `mypy --strict` comes back clean
+**Verified, with commands you can run yourself:** 254 tests pass, `mypy --strict` comes back clean
 across 40 source files, `ruff check` is clean, and a full 42-episode ablation (14 cases times 3
 memory modes) runs end to end offline and writes its report. Running `ablate` twice gives
 byte-identical output both times, which is the only reason the numbers below are worth quoting at
@@ -339,6 +372,35 @@ dossier instead of a crash. Want to reproduce or extend it? One command and a ke
 `osint-harness --live --record investigate <case-id>`. A full live ablation is one command too
 (`osint-harness --live --record ablate`), it just needs either a paid OpenRouter balance or a few
 days spread out to clear the free-tier daily cap.
+
+### What three more live runs looked like, once search actually worked
+
+After replacing the blocked search backend (decision #11) and moving to NVIDIA (decision #10), I ran
+three more full investigations end to end. These are the real numbers, not a best-of:
+
+| Case | Verdict | Expected | Brier | Sources | Tool calls | Failed | Tag |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ada-lovelace-person` | supported | supported | 0.09 | 7 | 27 | 5 | no_convergence |
+| `theranos-company` | supported | refuted | 0.61 | 3 | 27 | 10 | no_convergence |
+| `einstein-nobel-relativity-claim` | refuted | partially_supported | 0.85 | 3 | 16 | 0 | overconfident |
+
+What I want to be precise about is which half of that is the harness and which half is the model.
+The harness half worked: zero crashes, zero silent failures, every `web_search` call returning real
+results, source diversity going from one to seven, ACH scoring 12 to 48 evidence-hypothesis pairs
+per round instead of the zero that a real bug used to produce, `record_evidence` visibly refusing
+citations that did not trace to a retrieved document, and the Einstein run completing all six phases
+through Dissemination with 16 of 16 tool calls succeeding. Every failed tool call above is a real
+site refusing a bot: `sec.gov`, `britannica.com` and `nytimes.com` returning 403, the WSJ returning
+401 at a paywall. Those are honest retrieval failures, correctly recorded rather than hidden.
+
+The model half is where it gets interesting, and I am not going to dress it up. One of three verdicts
+was right. Theranos, a case whose whole point is adverse media, came back `supported` on real
+evidence from `justice.gov` and Wikipedia. Einstein got the underlying fact right (the prize was for
+the photoelectric effect) but forced it into `refuted` at 0.92 confidence when the honest answer is
+`partially_supported`, and the failure taxonomy caught exactly that and tagged it `overconfident`.
+That is the system working as designed: a free 120B model reasoning imperfectly over real evidence is
+the thing being measured, and the point of Brier scores and failure tags is that a wrong answer
+arrives labelled as one rather than quietly passing for a right one.
 
 ---
 

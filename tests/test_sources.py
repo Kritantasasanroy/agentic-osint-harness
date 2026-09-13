@@ -13,7 +13,6 @@ from osint_harness.sources.cassette import (
     RecordedCall,
 )
 from osint_harness.sources.tools import (
-    DuckDuckGoResults,
     Encyclopedia,
     EncyclopediaResponse,
     PageFetch,
@@ -173,90 +172,80 @@ class TestEncyclopediaRetrieval:
         assert documents[0].source_domain == "en.wikipedia.org"
 
 
-DUCKDUCKGO_SAMPLE = """
-<div class="results">
-  <div class="result web-result">
-    <div class="result__body">
-      <h2 class="result__title">
-        <a rel="nofollow" class="result__a"
-           href="//duckduckgo.com/l/?uddg=https%3A%2F%2Freuters.com%2Facme&amp;rut=abc">
-          Acme files for court protection
-        </a>
-      </h2>
-      <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Freuters.com%2Facme">
-        Acme Corp filed for court protection today.
-      </a>
-    </div>
-  </div>
-  <div class="result web-result">
-    <div class="result__body">
-      <h2 class="result__title">
-        <a rel="nofollow" class="result__a" href="https://ft.com/content/acme-2">
-          Acme raises new funding
-        </a>
-      </h2>
-      <a class="result__snippet" href="https://ft.com/content/acme-2">
-        Acme Corp raised a new funding round.
-      </a>
-    </div>
-  </div>
-</div>
-"""
-
-
-class TestDuckDuckGoResults:
-    def test_parses_title_and_snippet_pairs_in_order(self) -> None:
-        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
-
-        assert len(results) == 2
-        assert results[0][1] == "Acme files for court protection"
-        assert results[0][2] == "Acme Corp filed for court protection today."
-
-    def test_unwraps_the_duckduckgo_redirect_link(self) -> None:
-        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
-
-        assert results[0][0] == "https://reuters.com/acme"
-
-    def test_keeps_an_already_absolute_link_unchanged(self) -> None:
-        results = DuckDuckGoResults.of(DUCKDUCKGO_SAMPLE)
-
-        assert results[1][0] == "https://ft.com/content/acme-2"
-
-    def test_an_empty_page_yields_no_results(self) -> None:
-        assert DuckDuckGoResults.of("<html><body>no results here</body></html>") == ()
+TAVILY_SAMPLE = {
+    "results": [
+        {
+            "url": "https://reuters.com/acme",
+            "title": "Acme files for court protection",
+            "content": "Acme Corp filed for court protection today.",
+        },
+        {
+            "url": "https://ft.com/content/acme-2",
+            "title": "Acme raises new funding",
+            "content": "Acme Corp raised a new funding round.",
+        },
+    ]
+}
 
 
 class TestWebSearchRetrieval:
+    def _searching(self, monkeypatch: pytest.MonkeyPatch, payload: object) -> WebSearch:
+        monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: FakeResponse(payload=payload))
+        return WebSearch(Cassette(mode=CassetteMode.RECORD), api_key="test-key")
+
     def test_returns_documents_from_the_parsed_results(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
-        )
-        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+        documents = self._searching(monkeypatch, TAVILY_SAMPLE).retrieve("Acme Corp")
 
         assert documents[0].url == "https://reuters.com/acme"
         assert documents[0].title == "Acme files for court protection"
+        assert documents[0].source_domain == "reuters.com"
 
     def test_the_document_text_is_the_snippet_not_a_full_page(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
-        )
-        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+        documents = self._searching(monkeypatch, TAVILY_SAMPLE).retrieve("Acme Corp")
 
         assert documents[0].text == "Acme Corp filed for court protection today."
 
     def test_results_are_capped_at_max_results(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            httpx, "post", lambda *_args, **_kwargs: FakeResponse(text=DUCKDUCKGO_SAMPLE)
-        )
+        searching = self._searching(monkeypatch, TAVILY_SAMPLE)
         monkeypatch.setattr(WebSearch, "MAX_RESULTS", 1)
 
-        documents = WebSearch(Cassette(mode=CassetteMode.RECORD)).retrieve("Acme Corp")
+        assert len(searching.retrieve("Acme Corp")) == 1
 
-        assert len(documents) == 1
+    def test_a_hit_with_no_url_is_dropped_rather_than_cited(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        payload = {"results": [{"url": "", "title": "nowhere", "content": "x"}]}
+
+        assert self._searching(monkeypatch, payload).retrieve("Acme Corp") == ()
+
+    def test_a_missing_key_refuses_rather_than_searching_for_nothing(self) -> None:
+        """The scraper this replaced failed by succeeding with zero results, so an instance with
+        no key configured must refuse out loud instead of looking like a search that found
+        nothing."""
+        searching = WebSearch(Cassette(mode=CassetteMode.RECORD), api_key="")
+
+        with pytest.raises(httpx.HTTPError, match="TAVILY_API_KEY"):
+            searching.retrieve("Acme Corp")
+
+    def test_a_reply_that_is_not_results_is_a_failure_not_an_empty_search(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A bot challenge or a throttle notice must never read as "found nothing". This is the
+        exact defect that made the old DuckDuckGo scraper return empty on every single call while
+        reporting success: HTTP 202 with a challenge page is a 2xx, so nothing raised."""
+        monkeypatch.setattr(
+            httpx,
+            "post",
+            lambda *_args, **_kwargs: FakeResponse(text="<html>please verify you are human</html>"),
+        )
+        searching = WebSearch(Cassette(mode=CassetteMode.RECORD), api_key="test-key")
+
+        with pytest.raises(httpx.HTTPError, match="did not return results"):
+            searching.retrieve("Acme Corp")
 
 
 class TestPageFetchRetrieval:

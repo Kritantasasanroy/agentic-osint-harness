@@ -7,15 +7,29 @@ from pydantic import BaseModel, Field, ValidationError
 
 from osint_harness.model.client import ModelClient, ModelRefusedError, ModelUnavailableError, Usage
 
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
+
+OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+NVIDIA_ENDPOINT = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 
 class ChatMessage(BaseModel):
-    """The assistant message inside one completion choice."""
+    """The assistant message inside one completion choice.
+
+    Two providers, two names for the same thing: OpenRouter normalises every provider's reasoning
+    trace to `reasoning`; NVIDIA's own API, reached directly, calls it `reasoning_content`. Both are
+    kept rather than picking one, so nothing about which endpoint served this reply leaks further
+    than this one class.
+    """
 
     content: str | None = None
     refusal: str | None = None
     reasoning: str | None = None
+    reasoning_content: str | None = None
+
+    def reasoning_trace(self) -> str | None:
+        """Whichever field this provider actually used to carry the reasoning trace."""
+        return self.reasoning or self.reasoning_content
 
 
 class ChatChoice(BaseModel):
@@ -33,7 +47,7 @@ class ChatUsage(BaseModel):
 
 
 class ChatError(BaseModel):
-    """An error OpenRouter reported inside an otherwise-200 response body."""
+    """An error the provider reported inside an otherwise-200 response body."""
 
     message: str = ""
     code: int | str = ""
@@ -48,26 +62,31 @@ class ChatCompletion(BaseModel):
 
 
 class LiveModel(ModelClient):
-    """The hosted reasoning engine, reached over OpenRouter's OpenAI-compatible chat API.
+    """The hosted reasoning engine, reached over an OpenAI-compatible chat completions API.
 
-    OpenRouter fronts many providers behind one key, including models priced at zero, which is why
-    it was chosen over a single vendor's API: the harness's only requirement of a model is that it
-    follows instructions and returns valid JSON, not that it comes from any particular lab.
-
-    The free tier is rate-limited rather than metered (20 requests/minute, 50/day with no credits
-    ever purchased, 1000/day past $10 lifetime), enforced per account rather than per key. Calls are
-    paced to stay under the per-minute ceiling; the daily ceiling is a real constraint this harness
-    cannot lift, which is why a full multi-mode benchmark sweep is not attempted against it in one
-    sitting — see the report for what was actually verified live.
+    Two providers are supported, both fronting the same free model, because they were tried and
+    found to behave very differently under this harness's real load. OpenRouter fronts many
+    providers behind one key, including models priced at zero, and was the original choice for
+    exactly that provider neutrality, but its free tier is rate-limited rather than metered (20
+    requests a minute, 50 a day with no credits ever purchased, enforced per account rather than
+    per key), and a live run of this harness genuinely exhausted the daily ceiling partway through
+    testing. NVIDIA's own API serves the same model directly and tolerated eight back-to-back
+    requests with no pacing at all in the same testing session, so it is preferred whenever its key
+    is present, falling back to OpenRouter only when it is not. `ModelClient`'s only real
+    requirement of a provider, turning a prompt into valid structured JSON, does not care which one
+    answers, which is why choosing between them is a matter of which key is configured, not a code
+    change.
     """
 
-    ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-    MIN_SECONDS_BETWEEN_CALLS = 3.5
+    MIN_SECONDS_BETWEEN_CALLS_NVIDIA = 0.5
+    MIN_SECONDS_BETWEEN_CALLS_OPENROUTER = 3.5
 
     def __init__(
         self,
         model: str = DEFAULT_MODEL,
         api_key: str | None = None,
+        *,
+        endpoint: str | None = None,
         # ponytail: 16000 covers direction/collection/appraisal/reconciliation live-verified; a
         # Reflection-driven Collection call carrying many accumulated evidence items has been
         # observed to exceed it (truncated JSON, caught as ModelUnavailableError). Raise further,
@@ -77,28 +96,41 @@ class LiveModel(ModelClient):
         timeout_seconds: float = 90.0,
     ) -> None:
         super().__init__()
-        key = api_key if api_key is not None else os.environ.get("OPENROUTER_API_KEY")
-        if not key:
+        nvidia_key = os.environ.get("NVIDIA_API_KEY")
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+        if api_key is not None:
+            key = api_key
+            self._endpoint = endpoint if endpoint is not None else NVIDIA_ENDPOINT
+        elif nvidia_key:
+            key = nvidia_key
+            self._endpoint = NVIDIA_ENDPOINT
+        elif openrouter_key:
+            key = openrouter_key
+            self._endpoint = OPENROUTER_ENDPOINT
+        else:
             raise ModelUnavailableError(
-                "OPENROUTER_API_KEY is not set; export it or pass api_key= explicitly"
+                "neither NVIDIA_API_KEY nor OPENROUTER_API_KEY is set; export one or pass "
+                "api_key= explicitly"
             )
         self._model = model
         self._max_tokens = max_tokens
         self._reasoning_effort = reasoning_effort
-        self._client = httpx.Client(
-            timeout=timeout_seconds,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "HTTP-Referer": "https://github.com/Kritantasasanroy/agentic-osint-harness",
-                "X-Title": "Agentic OSINT Harness",
-            },
+        self._min_seconds_between_calls = (
+            self.MIN_SECONDS_BETWEEN_CALLS_NVIDIA
+            if self._endpoint == NVIDIA_ENDPOINT
+            else self.MIN_SECONDS_BETWEEN_CALLS_OPENROUTER
         )
+        headers = {"Authorization": f"Bearer {key}"}
+        if self._endpoint == OPENROUTER_ENDPOINT:
+            headers["HTTP-Referer"] = "https://github.com/Kritantasasanroy/agentic-osint-harness"
+            headers["X-Title"] = "Agentic OSINT Harness"
+        self._client = httpx.Client(timeout=timeout_seconds, headers=headers)
         self._last_call_at: float | None = None
 
     def decide[T: BaseModel](self, purpose: str, system: str, prompt: str, schema: type[T]) -> T:
         self._respect_rate_limit()
         response = self._client.post(
-            self.ENDPOINT,
+            self._endpoint,
             json={
                 "model": self._model,
                 "max_tokens": self._max_tokens,
@@ -121,7 +153,7 @@ class LiveModel(ModelClient):
 
     def _empty_reply_reason(self, purpose: str, choice: ChatChoice) -> str:
         """A diagnosable reason for an empty reply, distinguishing exhaustion from silence."""
-        if choice.message.reasoning:
+        if choice.message.reasoning_trace():
             return (
                 f"no reply content returned during {purpose}: the model spent its budget on "
                 f"reasoning (finish_reason={choice.finish_reason!r}) without writing an answer; "
@@ -132,11 +164,15 @@ class LiveModel(ModelClient):
             f"(finish_reason={choice.finish_reason!r})"
         )
 
+    def _provider_name(self) -> str:
+        """Which provider actually served this call, so an error message names it correctly."""
+        return "NVIDIA" if self._endpoint == NVIDIA_ENDPOINT else "OpenRouter"
+
     def _respect_rate_limit(self) -> None:
-        """Keep this account under the free tier's 20-requests-per-minute ceiling."""
+        """Keep calls paced to whatever this provider was actually measured to tolerate."""
         if self._last_call_at is not None:
             elapsed = time.monotonic() - self._last_call_at
-            remaining = self.MIN_SECONDS_BETWEEN_CALLS - elapsed
+            remaining = self._min_seconds_between_calls - elapsed
             if remaining > 0:
                 time.sleep(remaining)
         self._last_call_at = time.monotonic()
@@ -161,7 +197,7 @@ class LiveModel(ModelClient):
         completion = ChatCompletion.model_validate(body)
         if completion.error is not None:
             raise ModelUnavailableError(
-                f"OpenRouter reported an error during {purpose}: "
+                f"{self._provider_name()} reported an error during {purpose}: "
                 f"{completion.error.message or completion.error.code}"
             )
         if response.status_code == httpx.codes.TOO_MANY_REQUESTS:

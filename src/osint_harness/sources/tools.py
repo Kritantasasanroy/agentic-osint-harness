@@ -1,7 +1,8 @@
+import os
 from abc import ABC, abstractmethod
 from html.parser import HTMLParser
 from typing import ClassVar
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import quote
 
 import httpx
 from pydantic import BaseModel, Field
@@ -168,108 +169,100 @@ class PageFetch(Tool):
         return opening if opening else "untitled page"
 
 
-class DuckDuckGoResults(HTMLParser):
-    """A search results page reduced to (url, title, snippet) triples, in result order.
 
-    DuckDuckGo's own template puts a result's title link and its snippet link in the same fixed
-    order for every result, so two ordered lists collected in one pass and zipped together is
-    simpler and just as reliable as tracking which snippet belongs to which title inline.
-    """
+class SearchHit(BaseModel):
+    """One result from the search provider, typed at the boundary rather than read as a dict."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._titles: list[tuple[str, str]] = []
-        self._snippets: list[str] = []
-        self._capturing: str = ""
-        self._buffer: list[str] = []
-        self._pending_href = ""
+    url: str = ""
+    title: str = ""
+    content: str = ""
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag != "a":
-            return
-        classes = dict(attrs).get("class") or ""
-        if "result__a" in classes:
-            self._capturing = "title"
-            self._buffer = []
-            self._pending_href = dict(attrs).get("href") or ""
-        elif "result__snippet" in classes:
-            self._capturing = "snippet"
-            self._buffer = []
 
-    def handle_endtag(self, tag: str) -> None:
-        if tag != "a" or not self._capturing:
-            return
-        text = " ".join("".join(self._buffer).split())
-        if self._capturing == "title":
-            self._titles.append((self._resolved_url(self._pending_href), text))
-        else:
-            self._snippets.append(text)
-        self._capturing = ""
-        self._buffer = []
+class SearchResponse(BaseModel):
+    """The provider's reply to one query."""
 
-    def handle_data(self, data: str) -> None:
-        if self._capturing:
-            self._buffer.append(data)
+    results: tuple[SearchHit, ...] = ()
 
-    @classmethod
-    def _resolved_url(cls, href: str) -> str:
-        """DuckDuckGo wraps result links in its own redirect; unwrap it to the real destination."""
-        parsed = urlparse(href)
-        if parsed.netloc.endswith("duckduckgo.com") and parsed.path == "/l/":
-            target = parse_qs(parsed.query).get("uddg", [""])[0]
-            return unquote(target) if target else href
-        if href.startswith("http"):
-            return href
-        return f"https:{href}" if href.startswith("//") else href
-
-    def results(self) -> tuple[tuple[str, str, str], ...]:
-        """(url, title, snippet) triples, one per result, in page order."""
-        return tuple(
-            (url, title, snippet)
-            for (url, title), snippet in zip(self._titles, self._snippets, strict=False)
-            if url.startswith("http")
-        )
-
-    @classmethod
-    def of(cls, html: str) -> tuple[tuple[str, str, str], ...]:
-        """Read a results page and return its (url, title, snippet) triples."""
-        parser = cls()
-        parser.feed(html)
-        return parser.results()
+    def usable(self) -> tuple[SearchHit, ...]:
+        """The hits that actually give somewhere to go."""
+        return tuple(hit for hit in self.results if hit.url.strip())
 
 
 class WebSearch(Tool):
-    """Keyless web search via DuckDuckGo's HTML front end.
+    """Web search, through Tavily's API.
 
-    No provider offers server-side search for free, so this harness owns the capability itself
-    rather than depending on one. That also closes a gap the earlier model-provided search never
-    had: because this is a `Tool`, its results are cassette-recorded like every other retrieval, so
-    a search step can be replayed offline instead of only ever being a scripted stand-in.
+    This scraped DuckDuckGo's HTML front end until a live run showed that broken in the worst way
+    available: DuckDuckGo answers a self-identifying client with HTTP 202 and a bot-challenge page
+    rather than results. 202 is a success code, so `raise_for_status` stayed quiet, the parser found
+    no results in a page that genuinely had none, and every search came back empty without ever
+    being recorded as a failure. Live investigations reached exactly one source, Wikipedia, and
+    reported that as a clean run. GDELT's keyless API was measured as a replacement and rejected on
+    evidence: 429 on roughly half of all calls even paced ten seconds apart, and 50 to 80 seconds
+    per search once retries were counted.
 
-    Results carry only the search snippet, never the full page: a snippet is a lead to weigh, not
-    evidence to cite. `Collection` decides which results are worth opening in full through
-    `PageFetch` before anything is recorded against the investigation.
+    So this uses a real search API with a key, which is what the `ponytail:` note on the old scraper
+    always said the upgrade path was. A key is required rather than optional: a search that silently
+    does nothing is worse than one that refuses to start, which is the entire lesson of the scraper
+    it replaced.
+
+    Results carry the provider's snippet, never the article body: a hit is a lead to weigh, not
+    evidence to cite. `Collection` decides which are worth opening in full through `PageFetch`
+    before anything is recorded against the investigation.
     """
 
-    ENDPOINT = "https://html.duckduckgo.com/html/"
+    ENDPOINT = "https://api.tavily.com/search"
     MAX_RESULTS: ClassVar[int] = 6
-    # ponytail: HTML scraping is fragile to markup changes; swap for a paid search API
-    # (Brave/Serper) if result quality or reliability becomes the bottleneck.
+
+    def __init__(
+        self, cassette: Cassette, timeout_seconds: float = 20.0, api_key: str | None = None
+    ) -> None:
+        super().__init__(cassette, timeout_seconds)
+        self._api_key = api_key if api_key is not None else os.environ.get("TAVILY_API_KEY", "")
 
     @property
     def name(self) -> str:
         return "web_search"
 
     def retrieve(self, query: str) -> tuple[Document, ...]:
+        if not self._api_key:
+            raise httpx.HTTPError(
+                "TAVILY_API_KEY is not set, so live web search is unavailable on this instance"
+            )
         response = httpx.post(
             self.ENDPOINT,
-            data={"q": query},
-            headers={"User-Agent": self.USER_AGENT},
+            json={
+                "query": query,
+                "max_results": self.MAX_RESULTS,
+                "search_depth": "basic",
+            },
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": self.USER_AGENT,
+            },
             timeout=self._timeout_seconds,
             follow_redirects=True,
         )
         response.raise_for_status()
         return tuple(
-            Document.retrieved(url=url, title=title or url, text=snippet)
-            for url, title, snippet in DuckDuckGoResults.of(response.text)[: self.MAX_RESULTS]
+            Document.retrieved(
+                url=hit.url,
+                title=hit.title or hit.url,
+                text=hit.content or hit.title or hit.url,
+            )
+            for hit in self._parsed(response).usable()[: self.MAX_RESULTS]
         )
+
+    def _parsed(self, response: httpx.Response) -> SearchResponse:
+        """The results, refusing a reply that is not actually results.
+
+        A search that legitimately finds nothing returns an empty list, and that is a real answer
+        worth recording as one. A challenge page or a throttle notice is not, and telling those
+        apart is the whole point: the scraper this replaced could not, so a wholly blocked search
+        kept passing as a successful one that happened to find nothing.
+        """
+        try:
+            return SearchResponse.model_validate(response.json())
+        except ValueError as failure:
+            summary = " ".join(response.text.split())[:160]
+            raise httpx.HTTPError(f"search did not return results: {summary}") from failure

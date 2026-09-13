@@ -14,3 +14,8 @@ runs/
 .env
 
 *.pdf
+
+# local agent tooling, not part of the submission
+.claude/
+.agents/
+skills-lock.json

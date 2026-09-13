@@ -10,7 +10,12 @@ from osint_harness.model.client import (
     ScriptedModel,
     Usage,
 )
-from osint_harness.model.live import DEFAULT_MODEL, LiveModel
+from osint_harness.model.live import (
+    DEFAULT_MODEL,
+    NVIDIA_ENDPOINT,
+    OPENROUTER_ENDPOINT,
+    LiveModel,
+)
 
 
 class Decision(BaseModel):
@@ -121,22 +126,65 @@ class TestScriptedModel:
 
 
 class TestLiveModelConfiguration:
-    def test_requires_an_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two providers can serve this harness, chosen by which key is actually configured, since a
+    live run found OpenRouter's free tier genuinely exhausts its daily ceiling and NVIDIA's own API
+    serves the identical model directly with far more headroom. NVIDIA is preferred whenever its key
+    is present; OpenRouter remains the fallback for anyone without one, so nothing that already
+    worked stops working."""
+
+    def _no_keys(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        with pytest.raises(ModelUnavailableError, match="OPENROUTER_API_KEY"):
+
+    def test_requires_a_key_from_either_provider(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._no_keys(monkeypatch)
+        with pytest.raises(ModelUnavailableError, match="NVIDIA_API_KEY"):
             LiveModel(api_key=None)
 
-    def test_an_explicit_key_is_accepted_without_the_env_var(
+    def test_an_explicit_key_is_accepted_without_either_env_var(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        self._no_keys(monkeypatch)
         LiveModel(api_key="sk-test")
 
-    def test_the_env_var_is_used_when_no_key_is_passed(
+    def test_an_explicit_key_with_no_endpoint_prefers_nvidia(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        self._no_keys(monkeypatch)
+        model = LiveModel(api_key="sk-test")
+        assert model._endpoint == NVIDIA_ENDPOINT
+
+    def test_the_nvidia_env_var_is_used_when_no_key_is_passed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._no_keys(monkeypatch)
+        monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-from-env")
+        model = LiveModel()
+        assert model._endpoint == NVIDIA_ENDPOINT
+
+    def test_the_openrouter_env_var_is_used_when_nvidia_is_not_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._no_keys(monkeypatch)
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-from-env")
-        LiveModel()
+        model = LiveModel()
+        assert model._endpoint == OPENROUTER_ENDPOINT
+
+    def test_nvidia_is_preferred_when_both_env_vars_are_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._no_keys(monkeypatch)
+        monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-from-env")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-from-env")
+        model = LiveModel()
+        assert model._endpoint == NVIDIA_ENDPOINT
+
+    def test_an_explicit_endpoint_overrides_the_default_for_the_key_given(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._no_keys(monkeypatch)
+        model = LiveModel(api_key="sk-test", endpoint=OPENROUTER_ENDPOINT)
+        assert model._endpoint == OPENROUTER_ENDPOINT
 
 
 class Recorder:
@@ -249,12 +297,14 @@ class TestLiveModelDecide:
         assert "verdict" in messages[0]["content"]
         assert messages[1]["content"] == "the user line"
 
-    def test_two_calls_are_paced_to_respect_the_free_tier_rate_limit(
+    def test_calls_through_nvidia_are_paced_to_what_it_was_measured_to_tolerate(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """Passing a bare `api_key` with no endpoint prefers NVIDIA, the faster of the two
+        measured providers, so the gap this pacing must fill is smaller than OpenRouter's."""
         slept: list[float] = []
         monkeypatch.setattr("time.sleep", slept.append)
-        clock = iter([1000.0, 1000.5, 1000.5])
+        clock = iter([1000.0, 1000.1, 1000.1])
         monkeypatch.setattr("time.monotonic", lambda: next(clock))
         model = LiveModel(api_key="sk-test")
         monkeypatch.setattr(
@@ -267,3 +317,24 @@ class TestLiveModelDecide:
         model.decide("direction", "sys", "prompt", Decision)
 
         assert slept and slept[0] > 0
+
+    def test_calls_through_openrouter_are_paced_to_its_documented_rate_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OpenRouter's free tier is the slower path, kept for when no NVIDIA key is configured,
+        so it still gets its own, wider pacing rather than NVIDIA's."""
+        slept: list[float] = []
+        monkeypatch.setattr("time.sleep", slept.append)
+        clock = iter([1000.0, 1000.5, 1000.5])
+        monkeypatch.setattr("time.monotonic", lambda: next(clock))
+        model = LiveModel(api_key="sk-test", endpoint=OPENROUTER_ENDPOINT)
+        monkeypatch.setattr(
+            model._client,
+            "post",
+            lambda *_a, **_k: FakeChatResponse(Completion.of(json.dumps({"verdict": "go"}))),
+        )
+
+        model.decide("direction", "sys", "prompt", Decision)
+        model.decide("direction", "sys", "prompt", Decision)
+
+        assert slept and slept[0] > 2.5

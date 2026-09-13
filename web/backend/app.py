@@ -311,8 +311,8 @@ class HostedDemo:
         self._runner = ThreadPoolExecutor(max_workers=1, thread_name_prefix="investigation")
 
     def live_is_configured(self) -> bool:
-        """Whether a key is present at all, which decides if live mode can even be offered."""
-        return bool(os.environ.get("OPENROUTER_API_KEY"))
+        """Whether either provider has a key present, which decides if live mode can be offered."""
+        return bool(os.environ.get("NVIDIA_API_KEY") or os.environ.get("OPENROUTER_API_KEY"))
 
     def health(self) -> Health:
         """Liveness, proof the benchmark loaded, and whether live runs are actually available."""
@@ -476,7 +476,7 @@ DEMO = HostedDemo(
         daily=int(os.environ.get("LIVE_CALLS_PER_DAY", "40")),
         per_visitor=int(os.environ.get("LIVE_CALLS_PER_VISITOR", "14")),
     ),
-    model_id=os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
+    model_id=os.environ.get("LIVE_MODEL", DEFAULT_MODEL),
 )
 
 app = FastAPI(
