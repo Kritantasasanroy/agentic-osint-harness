@@ -211,6 +211,20 @@ class TestSubjectPolymorphism:
         assert "set-aside clause is wrong" in partly_wrong
         assert "presupposes something that is not real" in false_premise
 
+    def test_claim_hypotheses_never_end_with_a_colon_then_the_proposition(self) -> None:
+        """Found live, through the document-upload path rather than the benchmark: a model read a
+        hypothesis ending "...as put: {proposition}" as a label needing its own JSON key, and
+        wrapped every hypothesis in a one-entry object instead of writing the plain string the
+        schema asks for, which failed validation and halted the episode at the very first phase.
+        The proposition is still named in each hypothesis, for the same de-duplication reason as
+        before, just woven into the sentence rather than appended after a colon."""
+        proposition = "X received an award for reason Y."
+        claim = Claim(name="award-claim", proposition=proposition)
+
+        for hypothesis in claim.opening_hypotheses():
+            assert not hypothesis.rstrip().endswith(f": {proposition}")
+            assert proposition in hypothesis
+
 
 class TestInvestigation:
     def _open(self) -> Investigation:

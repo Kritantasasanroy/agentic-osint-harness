@@ -188,18 +188,23 @@ class Claim(Subject):
         )
 
     def opening_hypotheses(self) -> tuple[str, ...]:
+        # ponytail: each hypothesis names the proposition mid-sentence rather than after a
+        # trailing colon on purpose. A live run had a model read a colon-then-proposition suffix
+        # as a label needing its own JSON key and wrapped every hypothesis in a one-entry dict,
+        # which the schema (a bare string) rejected outright.
         return (
-            f"Every specific detail the assertion states is accurate: {self.proposition}",
-            "What the assertion presupposes is real, and, setting aside any clause giving the "
-            "reason, date, place, manner or actor, the core event or state of affairs that "
-            f"remains did not happen or does not hold at all: {self.proposition}",
-            "What the assertion presupposes is real, and, setting aside any clause giving the "
-            "reason, date, place, manner or actor, the core event or state of affairs that "
-            f"remains did happen or does hold, but that set-aside clause is wrong: "
-            f"{self.proposition}",
-            "The assertion presupposes something that is not real, such as an office nobody "
-            f"currently holds, so it cannot be evaluated as true or false as put: "
-            f"{self.proposition}",
+            f"The assertion that {self.proposition} is accurate in every specific detail it "
+            "states.",
+            f"What the assertion that {self.proposition} presupposes is real, but, setting "
+            "aside any clause giving the reason, date, place, manner or actor, the core event "
+            "or state of affairs that remains did not happen or does not hold at all.",
+            f"What the assertion that {self.proposition} presupposes is real, and, setting "
+            "aside any clause giving the reason, date, place, manner or actor, the core event "
+            "or state of affairs that remains did happen or does hold, but that set-aside "
+            "clause is wrong.",
+            f"The assertion that {self.proposition} presupposes something that is not real, "
+            "such as an office nobody currently holds, so it cannot be evaluated as true or "
+            "false as put.",
         )
 
     def proposition_under_test(self) -> str:

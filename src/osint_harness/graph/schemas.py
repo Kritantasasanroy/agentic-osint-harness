@@ -1,8 +1,30 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from osint_harness.domain.analysis import Consistency, Judgment
 from osint_harness.domain.investigation import LeadPriority
 from osint_harness.domain.provenance import InformationCredibility, SourceReliability
+
+
+def _flattened_hypotheses(hypotheses: object) -> object:
+    """A hypothesis list recovered from a model that wrapped an entry in a one-key object.
+
+    A live run had a model read a hypothesis containing a colon as a label needing its own JSON
+    key, and wrapped it in `{"label": "the rest of the sentence"}` instead of writing it as the
+    plain string the schema asks for; the whole reply then failed validation and halted the
+    episode. The prompt no longer writes hypotheses with a colon in them for this reason, but this
+    stays as a backstop: rejoining a one-entry object's key and value recovers the same sentence
+    the model meant, at the one point a stray dict would otherwise be treated as malformed.
+    """
+    if not isinstance(hypotheses, (list, tuple)):
+        return hypotheses
+    flattened: list[object] = []
+    for item in hypotheses:
+        if isinstance(item, dict) and len(item) == 1:
+            ((key, value),) = item.items()
+            flattened.append(f"{key}: {value}")
+        else:
+            flattened.append(item)
+    return flattened
 
 
 class PlannedLead(BaseModel):
@@ -17,6 +39,8 @@ class DirectionPlan(BaseModel):
 
     leads: tuple[PlannedLead, ...] = ()
     hypotheses: tuple[str, ...] = ()
+
+    _flatten_hypotheses = field_validator("hypotheses", mode="before")(_flattened_hypotheses)
 
 
 class CollectionPlan(BaseModel):
@@ -91,6 +115,10 @@ class ReflectionResult(BaseModel):
     new_hypotheses: tuple[str, ...] = ()
     ready_to_conclude: bool = False
     reason: str = ""
+
+    _flatten_new_hypotheses = field_validator("new_hypotheses", mode="before")(
+        _flattened_hypotheses
+    )
 
 
 class ReportDraft(BaseModel):

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from osint_harness.domain.analysis import Consistency, Evidence, Judgment
 from osint_harness.domain.investigation import (
@@ -202,6 +203,36 @@ class TestDirection:
 
         assert transition.next_phase is InvestigationPhase.COLLECTION
         assert transition.input_tokens > 0
+
+
+class TestHypothesisListsRecoverFromAStrayWrappingObject:
+    """Found live, through the document-upload path: a model read a hypothesis containing a colon
+    as a label needing its own JSON key, and wrapped it in a one-entry object instead of writing
+    the plain string the schema asks for. The reply failed validation outright and halted the
+    episode at Direction, its very first phase. The prompt no longer writes a hypothesis with a
+    colon in it, but both fields that ever hold a freshly-written hypothesis recover the same
+    sentence from that shape rather than treat it as unparseable."""
+
+    def test_direction_plan_recovers_a_wrapped_hypothesis(self) -> None:
+        plan = DirectionPlan.model_validate(
+            {"hypotheses": [{"the assertion is accurate": "Acme Corp operates."}, "A plain one."]}
+        )
+
+        assert plan.hypotheses == ("the assertion is accurate: Acme Corp operates.", "A plain one.")
+
+    def test_reflection_result_recovers_a_wrapped_hypothesis_too(self) -> None:
+        result = ReflectionResult.model_validate(
+            {"new_hypotheses": [{"a third possibility": "Acme was acquired."}]}
+        )
+
+        assert result.new_hypotheses == ("a third possibility: Acme was acquired.",)
+
+    def test_a_multi_key_object_is_left_for_the_schema_to_reject(self) -> None:
+        """Recovering a one-entry object is a narrow, confident guess at what the model meant.
+        Guessing at a multi-key object would be exactly that, a guess, so this is left to fail
+        validation normally rather than silently inventing a specific reconstruction."""
+        with pytest.raises(ValidationError):
+            DirectionPlan.model_validate({"hypotheses": [{"a": "1", "b": "2"}]})
 
 
 class TestCollection:
