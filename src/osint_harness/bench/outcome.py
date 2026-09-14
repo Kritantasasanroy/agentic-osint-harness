@@ -135,6 +135,7 @@ class CaseOutcome(BaseModel):
     reached: Judgment
     correct: bool
     probability: float = Field(ge=0.0, le=1.0)
+    confidence_series: tuple[float, ...] = ()
     within_defensible_band: bool
     brier: float = Field(ge=0.0, le=1.0)
     reward: EpisodeReward
@@ -144,6 +145,7 @@ class CaseOutcome(BaseModel):
     assessments_to_stable_verdict: int = Field(ge=0)
     steps_taken: int = Field(ge=0)
     tool_calls: int = Field(ge=0)
+    failed_tool_calls: int = Field(default=0, ge=0)
     tokens: int = Field(ge=0)
     seconds: float = Field(ge=0.0)
     source_diversity: int = Field(ge=0)
@@ -165,6 +167,7 @@ class CaseOutcome(BaseModel):
             reached=assessment.judgment,
             correct=correct,
             probability=assessment.probability,
+            confidence_series=investigation.confidence_series(),
             within_defensible_band=case.confidence.contains(assessment.probability),
             brier=assessment.brier_score(was_correct=correct),
             reward=EpisodeReward.earned(investigation, case),
@@ -174,6 +177,7 @@ class CaseOutcome(BaseModel):
             assessments_to_stable_verdict=investigation.assessments_to_stable_verdict(),
             steps_taken=len(investigation.steps),
             tool_calls=len(investigation.tool_calls()),
+            failed_tool_calls=sum(1 for call in investigation.tool_calls() if not call.succeeded),
             tokens=investigation.token_cost(),
             seconds=investigation.elapsed_seconds(),
             source_diversity=investigation.source_diversity(),
@@ -287,6 +291,46 @@ class BenchmarkRun(Persisted):
         if not self.outcomes:
             return 0.0
         return sum(o.verdict_changes for o in self.outcomes) / len(self.outcomes)
+
+    def mean_steps(self) -> float:
+        """How many state-machine transitions an episode took, on average."""
+        if not self.outcomes:
+            return 0.0
+        return sum(o.steps_taken for o in self.outcomes) / len(self.outcomes)
+
+    def mean_tool_calls(self) -> float:
+        """How many external lookups an episode made, on average."""
+        if not self.outcomes:
+            return 0.0
+        return sum(o.tool_calls for o in self.outcomes) / len(self.outcomes)
+
+    def failed_tool_calls(self) -> int:
+        """Lookups across the sweep that returned nothing usable."""
+        return sum(outcome.failed_tool_calls for outcome in self.outcomes)
+
+    def mean_reward_progression(self) -> tuple[float, ...]:
+        """Mean cumulative reward at each step index, across every episode."""
+        return self._mean_by_position([o.reward_progression() for o in self.outcomes])
+
+    def mean_confidence_progression(self) -> tuple[float, ...]:
+        """Mean stated probability after each successive assessment, across every episode."""
+        return self._mean_by_position([o.confidence_series for o in self.outcomes])
+
+    @classmethod
+    def _mean_by_position(cls, series: list[tuple[float, ...]]) -> tuple[float, ...]:
+        """Average aligned series, an episode that stopped early holding its last value.
+
+        Dropping a finished episode from later positions would average the tail over only the
+        longest-running episodes, which measures survivorship rather than progression. An episode
+        with no series at all, an outcome recorded before this field existed, is left out of every
+        position rather than counted as a 0.0, which would silently drag the mean down.
+        """
+        present = [values for values in series if values]
+        length = max((len(values) for values in present), default=0)
+        return tuple(
+            sum(values[min(position, len(values) - 1)] for values in present) / len(present)
+            for position in range(length)
+        )
 
     def total_tokens(self) -> int:
         """Total spend across the sweep."""

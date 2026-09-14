@@ -4,7 +4,7 @@ import pytest
 
 from osint_harness.__main__ import CommandLine
 from osint_harness.bench.case import BenchmarkCase, DefensibleConfidence
-from osint_harness.bench.outcome import BenchmarkRun, CaseOutcome
+from osint_harness.bench.outcome import BenchmarkRun, CaseOutcome, FailureMode
 from osint_harness.domain.analysis import (
     Assessment,
     Consistency,
@@ -19,6 +19,7 @@ from osint_harness.domain.investigation import (
     Lead,
     MemoryMode,
     Step,
+    ToolCall,
 )
 from osint_harness.domain.provenance import (
     Document,
@@ -164,24 +165,127 @@ class TestDossier:
 
 
 class TestAblation:
+    def _case(self) -> BenchmarkCase:
+        return BenchmarkCase(
+            case_id="c1",
+            subject=Company(name="Acme Corp"),
+            expected=Judgment.SUPPORTED,
+            confidence=DefensibleConfidence(lowest=0.6, highest=0.9),
+        )
+
     def _ablation(self) -> Ablation:
         runs = []
         for mode in MemoryMode:
             investigation = Finished.investigation()
             investigation.memory_mode = mode
-            case = BenchmarkCase(
-                case_id="c1",
-                subject=Company(name="Acme Corp"),
-                expected=Judgment.SUPPORTED,
-                confidence=DefensibleConfidence(lowest=0.6, highest=0.9),
-            )
             runs.append(
                 BenchmarkRun(
                     memory_mode=mode,
-                    outcomes=(CaseOutcome.scored(investigation, case),),
+                    outcomes=(CaseOutcome.scored(investigation, self._case()),),
                 )
             )
         return Ablation(runs=tuple(runs))
+
+    def _longer_investigation(self) -> Investigation:
+        """The finished investigation plus one more step, whose lookup failed, and assessment."""
+        investigation = Finished.investigation()
+        investigation.record_step(
+            Step(
+                index=1,
+                phase=InvestigationPhase.COLLECTION,
+                moved_to=InvestigationPhase.APPRAISAL,
+                reason="the registry lookup failed",
+                tool_calls=(
+                    ToolCall(
+                        tool="search", query="Acme Corp", documents_returned=0, succeeded=False
+                    ),
+                ),
+            )
+        )
+        investigation.assess(
+            Assessment(
+                judgment=Judgment.SUPPORTED,
+                leading_hypothesis="Acme is operating.",
+                probability=0.9,
+                rationale="Filings still corroborate the description.",
+            )
+        )
+        return investigation
+
+    def test_efficiency_reports_steps_and_tool_calls_but_not_latency(self) -> None:
+        rendered = self._ablation().as_markdown()
+
+        assert "| Mean steps | Mean tool calls | Failed tool calls |" in rendered
+        assert "| 1.00 | 0.00 | 0 |" in rendered
+        assert "Latency |" not in rendered
+        assert "separate a source outage from a reasoning failure" in rendered
+
+    def test_reports_mean_cumulative_reward_after_each_step(self) -> None:
+        ablation = self._ablation()
+        rendered = ablation.as_markdown()
+        first = ablation.run_for(MemoryMode.NONE).mean_reward_progression()[0]
+
+        assert "### Reward progression" in rendered
+        assert "| Step | `none` | `short` | `long` |" in rendered
+        assert f"| 1 | {first:.3f} | {first:.3f} | {first:.3f} |" in rendered
+        assert "keeps paying for steps that add nothing" in rendered
+
+    def test_reports_mean_confidence_after_each_assessment_from_the_baseline(self) -> None:
+        ablation = self._ablation()
+        rendered = ablation.as_markdown()
+
+        assert "### Confidence progression" in rendered
+        assert "| Assessment | `none` | `short` | `long` |" in rendered
+        assert "| 1 | 0.50 | 0.50 | 0.50 |" in rendered
+        assert "| 2 | 0.82 | 0.82 | 0.82 |" in rendered
+        assert ablation.run_for(MemoryMode.LONG).mean_confidence_progression() == pytest.approx(
+            (0.5, 0.82)
+        )
+        assert "asserted once and left" in rendered
+
+    def test_an_episode_that_stopped_sooner_holds_its_final_value_in_the_means(self) -> None:
+        brief = CaseOutcome.scored(Finished.investigation(), self._case())
+        extended = CaseOutcome.scored(self._longer_investigation(), self._case())
+
+        run = BenchmarkRun(memory_mode=MemoryMode.SHORT, outcomes=(brief, extended))
+
+        assert run.mean_confidence_progression() == pytest.approx((0.5, 0.82, 0.86))
+        assert run.mean_reward_progression()[1] == pytest.approx(
+            (brief.reward_progression()[-1] + extended.reward_progression()[1]) / 2
+        )
+        assert (run.mean_steps(), run.mean_tool_calls(), run.failed_tool_calls()) == (1.5, 0.5, 1)
+
+    def test_an_outcome_recorded_before_this_field_existed_is_excluded_not_zeroed(self) -> None:
+        """A `CaseOutcome` loaded from disk before `confidence_series` was added defaults to an
+        empty tuple, not a missing episode. Averaging it in as a 0.0 at every position would
+        silently drag every mean down by a fixed fraction for as long as any old file sits
+        alongside new ones, which is exactly the shape of bug a flat, wrong-looking number never
+        announces itself as."""
+        current = CaseOutcome.scored(Finished.investigation(), self._case())
+        legacy = current.model_copy(update={"confidence_series": ()})
+
+        run = BenchmarkRun(memory_mode=MemoryMode.SHORT, outcomes=(legacy, current))
+
+        assert run.mean_confidence_progression() == current.confidence_series
+
+    def test_a_mode_no_episode_of_which_ran_that_long_shows_a_dash(self) -> None:
+        ablation = Ablation(
+            runs=(
+                BenchmarkRun(
+                    memory_mode=MemoryMode.NONE,
+                    outcomes=(CaseOutcome.scored(Finished.investigation(), self._case()),),
+                ),
+                BenchmarkRun(
+                    memory_mode=MemoryMode.LONG,
+                    outcomes=(CaseOutcome.scored(self._longer_investigation(), self._case()),),
+                ),
+            )
+        )
+
+        rendered = ablation.as_markdown()
+
+        assert "| 2 | — | " in rendered
+        assert "| 3 | — | 0.90 |" in rendered
 
     def test_reports_every_mode_that_was_run(self) -> None:
         rendered = self._ablation().as_markdown()
@@ -200,6 +304,13 @@ class TestAblation:
         assert "Irrelevant retrieval" in rendered
         assert "Harmful retrieval" in rendered
         assert "not a demonstrated cause" in rendered
+
+    def test_lists_every_failure_mode_and_labels_tokens_as_estimates(self) -> None:
+        rendered = self._ablation().as_markdown()
+
+        for failure in FailureMode:
+            assert f"| {failure.value.replace('_', ' ')} |" in rendered
+        assert "not provider-measured usage" in rendered
 
     def test_asking_for_a_mode_that_was_not_run_is_an_error(self) -> None:
         ablation = Ablation(runs=())

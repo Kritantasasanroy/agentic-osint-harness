@@ -31,7 +31,7 @@ packages = ["src/osint_harness"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["src", "tests", "web"]
+files = ["src", "tests", "web", "scripts"]
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
 
@@ -42,7 +42,7 @@ disallow_untyped_decorators = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests", "web/backend"]
+src = ["src", "tests", "web/backend", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "ARG", "PL", "RUF"]
@@ -53,4 +53,4 @@ ignore = ["PLR0913"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "web/backend"]
+pythonpath = ["src", "web/backend", "scripts"]

@@ -337,6 +337,15 @@ class TestAppraisal:
         assert graded.reliability is SourceReliability.COMPLETELY_RELIABLE
         assert "wire service" in graded.reason
 
+    def test_the_prompt_asks_for_the_author_own_voice_not_a_rebutted_claim(self) -> None:
+        model = ScriptedModel()
+        model.script("appraisal", Episode.strong_appraisal(InformationCredibility.CONFIRMED))
+
+        Appraisal(model).advance(Episode.with_document())
+
+        assert "own author states to be true" in model.prompts_seen[0]
+        assert "never the claim restated bare" in model.prompts_seen[0]
+
     def test_an_assertion_citing_an_unretrieved_document_is_refused_and_reported(self) -> None:
         model = ScriptedModel()
         model.script(

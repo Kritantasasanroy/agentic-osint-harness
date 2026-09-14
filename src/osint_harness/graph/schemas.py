@@ -61,7 +61,11 @@ class ReadingChoice(BaseModel):
 class ExtractedAssertion(BaseModel):
     """One claim Appraisal read out of a retrieved document."""
 
-    assertion: str = Field(min_length=1)
+    assertion: str = Field(
+        min_length=1,
+        description="What the document's own author states to be true, so a claim the "
+        "document rebuts or calls a myth is recorded as that verdict, never restated bare.",
+    )
     document_url: str = Field(min_length=1)
     credibility: InformationCredibility = InformationCredibility.CANNOT_BE_JUDGED
     rationale: str = ""

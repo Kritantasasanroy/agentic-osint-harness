@@ -163,6 +163,25 @@ retrieval rate and two memory-interference failures. `none` and `short` show zer
 byte-identical across every arm, that difference is attributable to memory and nothing else. Which is
 the entire point of building the cassette layer first, before anything else.
 
+The report that run writes (`runs/results/ablation.md`) now reports the rest of what it measures
+rather than computing it and keeping it to itself: per arm, mean steps, mean tool calls and failed
+tool calls beside the token cost, assessments to a stable verdict and verdict changes, a reward
+progression by step, a confidence progression by assessment, and every failure type listed including
+the ones at zero, since a tag that never fires is information too. The token column there carries a
+caveat printed next to it: offline figures are synthetic estimates from the rehearsed analyst, a
+fixed count per call, not usage any provider measured. Only the live sweeps below report real ones.
+
+**The same comparison, run once against genuine live reasoning instead of the rehearsed stand-in,
+shows no measurable harm from long-term memory and a mild calibration edge, at a sample too small to
+generalise from.** 6 cases (two recall pairs, two recall-free controls) across all three modes:
+`long` matches `short`'s 83% accuracy but posts the best Brier score of the three (0.091 against
+0.128 and 0.152), and its one irrelevant recall produced an `overconfident` tag on an otherwise
+correct verdict, not a wrong answer or a memory-interference tag. Full tables, per-case verdicts, and
+the caveat that a third of episodes halted on provider capacity contention while three live sweeps
+shared the same allowance are in [`docs/live-results/memory-ablation.md`](live-results/memory-ablation.md).
+The offline sweep above stays the one with anything demonstrated at real sample size; this one
+demonstrates the same instrumentation works end to end on live reasoning, not that memory helps.
+
 **Failure attribution is informative, not decorative.** The dominant tag in the shipped run is
 `source_selection` (11 of 14 in both `none` and `short`), correctly flagging that every investigation
 rested on a single publisher. A true statement about the run, and exactly the kind of finding a plain
@@ -221,9 +240,40 @@ verdict word were talking past each other. Once every subject carried a stated p
 verdict standard (decision #12), and a run of live sweeps closed the specific hypothesis-wording and
 reasoning gaps that surfaced (decisions #12 and #13), the same live model reached 14 of 14 on the
 tuning set and 12 of 13 on a 13-case holdout set that never informed a single one of those fixes. The
-one holdout miss is itself instructive: an extraction defect on pages that restate a myth before
+one holdout miss was itself instructive: an extraction defect on pages that restate a myth before
 debunking it, found only because the holdout set was never used to tune anything, which is the entire
-argument for keeping one.
+argument for keeping one. Decision #14 fixes that defect generally rather than for the one case it
+was found on, and costs a case in the tuning set as a result: 13 of 14 tuning, 12 of 13 holdout, both
+misses now an honest abstention rather than a confident wrong answer. Full account, including the
+regression and why I chose not to chase it further, in decision #14 in the README.
+
+**Cost and quality don't track each other the way I expected.** Figures below are decision #14's
+sweep, not the one two paragraphs up; both sweeps were rerun after that fix, so a case-by-case
+comparison across the two sweeps' numbers isn't meaningful. The tuning sweep spent 361,826 tokens and
+3,928 seconds of wall clock across 14 cases; the holdout sweep spent 322,837 tokens and 3,815 seconds
+across 13. Per correct verdict that's roughly 27,800 tokens on the tuning set and roughly 26,900 on
+the holdout set, close enough that spend doesn't obviously separate the two sweeps the way it used
+to. The single most expensive episode in either sweep is `john-smith-person` at 46,115 tokens, correct
+both here and independently three-for-three during tuning (decision #12); the wrong verdict,
+`einstein-failed-maths-claim`, spent 25,607, below the tuning sweep's own mean. `ten-percent-brain-claim`,
+the other wrong verdict, is the single most expensive holdout episode at 40,358, going in circles
+over thin evidence rather than finding more of it (decision #14). At the other end, the cheapest
+episode anywhere, `apollo-11-date-claim` at 17,270 tokens over 6 steps, is the deliberate floor case,
+and it's correct. So cost still reads as a signal for difficulty, not for correctness in either
+direction: the priciest episode is right, the cheapest is right, and the two wrong ones sit on
+opposite ends of the spend range from each other.
+
+**Close to a quarter of all tool calls fail, and that's the working condition rather than an
+incident.** 51 of 219 in the tuning sweep, 46 of 201 in the holdout sweep, 23% either way. Both sweeps
+reached the accuracy above anyway, with that failure rate priced in, which is the part worth stating:
+an agent retrieving from the live web should be budgeted assuming close to a quarter of its lookups
+come back with nothing, and it has to record each one as a failed lookup rather than as an empty
+result, or the 202 problem from `WebSearch` reappears in a different costume. I'm calling this an
+observation and not a finding because I haven't broken those failures down by domain across a whole
+sweep. The runs I did read through were 403s and 401s, sites refusing a bot or gating a paywall, not
+defects in the harness; decision #14's Collection fix means a refusal now costs a retry against
+another candidate instead of a lost reading slot, which is part of why the failure share held roughly
+steady even though Collection is reading more candidates per round than before.
 
 ## 4. Limitations
 
@@ -256,8 +306,10 @@ neither one could ever have produced this failure, no matter how carefully eithe
 much further, and I'm leaving all of it exactly as it reads rather than editing history.** Search was
 fixed (decision #11), the model now runs against NVIDIA with real headroom (decision #10), and a long
 run of live sweeps closed most of the reasoning gaps a wider evidence base actually exposed (decisions
-#12 and #13). The result: 14 of 14 on the tuning set, 12 of 13 on a held-out set that never informed
-any of it. What follows is what's genuinely still true as of that later work, not superseded by it.
+#12 and #13), then a still later pass fixed a general extraction-polarity defect at the cost of one
+tuning case (decision #14). The result: 13 of 14 on the tuning set, 12 of 13 on a held-out set that
+never informed any of it, both remaining misses an honest abstention rather than a confident wrong
+answer. What follows is what's genuinely still true as of that later work, not superseded by it.
 
 **Reward weights are argued, not derived.** 0.40 / 0.25 / 0.20 / 0.15 is a defensible position about
 what matters most, but I haven't run a sensitivity analysis on it. A different reviewer could easily
@@ -284,19 +336,28 @@ jurisdictional records, beneficial-ownership chains: all untested.
 
 **Convergence is barely exercised.** Since the stand-in analyst reaches the same verdict every time,
 verdict-change and assessments-to-stable-verdict both sit at zero in the shipped run. The metrics
-themselves are implemented and tested, the shipped data just can't demonstrate them. One small thing
-did get caught here: an independent audit found this metric was indexing the assessment series while
+themselves are implemented and tested, the shipped data just can't demonstrate them. They're printed
+regardless now, beside a reward progression and a confidence progression that are flat for the same
+reason; the versions with something in them are the live sweeps in section 3. One small thing did
+get caught here: an independent audit found this metric was indexing the assessment series while
 labelled and reported as a step count, so a six-step episode was reading as "settling at step 0",
 which was just wrong.
 
 ## 5. What I'd do next, in order
 
-1. **Fix Appraisal's extraction-polarity gap the holdout set found**, the one open item in section 4:
-   teach it to extract a source's own position on a claim rather than any sentence mentioning the
-   claim, verified against `ten-percent-brain-claim` specifically and then reswept against the full
-   holdout set to confirm nothing else moved.
-2. **Run a full 42-episode live ablation** now that the live path reaches 14 of 14 on its own tuning
-   set. NVIDIA's real headroom (decision #10) makes this a same-day thing rather than a multi-day one.
+1. **Done: Appraisal's extraction-polarity gap is fixed (decision #14)**, verified against both myth
+   cases and the full tuning and holdout sets. What's still open, named in that same decision rather
+   than hidden: the two cases it still misses share a thinner problem upstream of Appraisal, source
+   selection finding only one genuinely on-topic page for a claim that a wide, mostly-tangential
+   search surfaces plenty of adjacent pages for. Improving the search-query and reading-choice prompts
+   for topical precision, then resweeping both sets the same way #14 was checked, is the next concrete
+   step, not a further loosening of how much evidence counts as sufficient.
+2. **Extend the live ablation from 6 cases to the full 42-episode set.** A first live run
+   ([`docs/live-results/memory-ablation.md`](live-results/memory-ablation.md)) already confirms
+   the instrumentation works end to end on genuine reasoning and shows no measurable harm from
+   memory, but at n=6 per arm, with over a third of episodes cut short by shared provider load, it
+   isn't a sample size anything can be generalised from. The full sweep, run without three other
+   live processes competing for the same allowance, is what would actually settle it.
 3. **Add a second and third real source type** beyond what Tavily's search surfaces on its own: a
    company registry, and a news archive, so evidence quality stops depending entirely on what one
    search API happens to rank first.

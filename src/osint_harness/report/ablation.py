@@ -33,6 +33,8 @@ class Ablation(BaseModel):
                 self._preamble(),
                 self._headline_table(),
                 self._efficiency_table(),
+                self._reward_progression_table(),
+                self._confidence_progression_table(),
                 self._memory_table(),
                 self._failure_table(),
             ]
@@ -66,17 +68,67 @@ class Ablation(BaseModel):
         header = [
             "### Cost and convergence",
             "",
-            "| Memory | Total tokens | Reward per 1k tokens | Mean assessments to a stable "
-            "verdict | Mean verdict changes |",
-            "| --- | --- | --- | --- | --- |",
+            "| Memory | Total tokens | Reward per 1k tokens | Mean steps | Mean tool calls | "
+            "Failed tool calls | Mean assessments to a stable verdict | Mean verdict changes |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
         rows = [
             f"| `{run.memory_mode.value}` | {run.total_tokens():,} | "
-            f"{run.reward_per_thousand_tokens():.4f} | "
+            f"{run.reward_per_thousand_tokens():.4f} | {run.mean_steps():.2f} | "
+            f"{run.mean_tool_calls():.2f} | {run.failed_tool_calls():,} | "
             f"{run.mean_assessments_to_stable_verdict():.2f} | {run.mean_verdict_changes():.2f} |"
             for run in self.runs
         ]
-        return "\n".join(header + rows)
+        note = [
+            "",
+            "In offline runs the token figures are synthetic estimates from the rehearsed analyst "
+            "(fixed tokens per call), not provider-measured usage. Mean steps and tool calls show "
+            "what each arm spent to reach its verdict, and failed tool calls separate a source "
+            "outage from a reasoning failure; wall-clock latency is left out because rehearsed "
+            "timings vary between runs and would break the report's reproducibility.",
+        ]
+        return "\n".join(header + rows + note)
+
+    def _reward_progression_table(self) -> str:
+        header = [
+            "### Reward progression",
+            "",
+            "Mean cumulative step reward (evidence and retrieval credit less token and call cost) "
+            "after each step, which shows whether an arm earns its reward early or keeps paying "
+            "for steps that add nothing; an episode that stopped earlier holds its final value, "
+            "and a dash means no episode in that mode ran that long.",
+            "",
+        ]
+        progressions = [run.mean_reward_progression() for run in self.runs]
+        return "\n".join(header + self._progression_rows("Step", progressions, digits=3))
+
+    def _confidence_progression_table(self) -> str:
+        header = [
+            "### Confidence progression",
+            "",
+            "Mean stated probability after each successive assessment, starting from the 0.50 "
+            "baseline every episode opens with, which shows whether confidence moves as evidence "
+            "arrives or is asserted once and left; an episode with fewer assessments holds its "
+            "last value, and a dash means no episode in that mode assessed that often.",
+            "",
+        ]
+        progressions = [run.mean_confidence_progression() for run in self.runs]
+        return "\n".join(header + self._progression_rows("Assessment", progressions, digits=2))
+
+    def _progression_rows(
+        self, label: str, progressions: list[tuple[float, ...]], digits: int
+    ) -> list[str]:
+        rows = [
+            f"| {label} | " + " | ".join(f"`{run.memory_mode.value}`" for run in self.runs) + " |",
+            "| --- | " + " | ".join("---" for _ in self.runs) + " |",
+        ]
+        for position in range(max((len(values) for values in progressions), default=0)):
+            cells = [
+                f"{values[position]:.{digits}f}" if position < len(values) else "—"
+                for values in progressions
+            ]
+            rows.append(f"| {position + 1} | " + " | ".join(cells) + " |")
+        return rows
 
     def _memory_table(self) -> str:
         header = [
@@ -110,8 +162,6 @@ class Ablation(BaseModel):
         rows = []
         for failure in FailureMode:
             counts = [self.run_for(mode).failure_counts().get(failure, 0) for mode in modes]
-            if not any(counts):
-                continue
             rows.append(
                 f"| {failure.value.replace('_', ' ')} | "
                 + " | ".join(str(count) for count in counts)

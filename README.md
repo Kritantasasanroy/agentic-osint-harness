@@ -24,7 +24,7 @@ pip install -e ".[dev]"
 osint-harness cases                                  # the 14 benchmark subjects and claims
 osint-harness investigate ada-lovelace-person        # one investigation, replayed offline
 osint-harness ablate                                 # all 14 cases x 3 memory modes, with a report
-pytest && mypy && ruff check .                       # 288 tests, strict types, clean lint
+pytest && mypy && ruff check .                       # 302 tests, strict types, clean lint
 ```
 
 Reports land in `runs/<case>-<memory>/findings.md`, and the ablation report in
@@ -398,6 +398,64 @@ back to back, unrelated to what each one is actually reasoning about:
   page, as a failed lookup rather than bad evidence, and the parser escapes an unrecognised marked
   section instead of raising on it.
 
+### 14. The `ten-percent-brain-claim` fix, and the regression it traded for
+
+Decision #13's honest-miss writeup above named the mechanism precisely: Appraisal extracted a myth
+as if the page were asserting it, when the page was actually debunking it. That's a general failure
+shape, not a one-off, so the fix is general too: Appraisal's prompt and the `ExtractedAssertion`
+schema field now both say the same thing explicitly, an assertion is what the document's own author
+states to be true, in the author's voice, and a document that reports a claim only to rebut it,
+attribute it to others, or call it a myth gets recorded as that verdict, never the claim restated
+bare. Collection got one more fix in the same pass, unrelated in cause but discovered the same way:
+a page refused by its own host (403, 401, 404, roughly a quarter of all reads across both sweeps
+below) used to spend a reading slot on nothing, so a round could open four pages and read zero of
+them. Reading now keeps trying candidates until enough of them actually succeed, capped so a run of
+refusals can't spend the tool budget unbounded.
+
+Both fixes are checked into `main` and verified the same way #12 and #13 were: a full 14-case tuning
+sweep, then, once every line here was frozen, one holdout sweep. Live sweeps this time overlapped
+with other work sharing the same provider allowance, so a handful of episodes halted on a 429 or a
+503 partway through, roughly half of those with the correct verdict already reached and half
+without; every halted episode was rerun clean before being counted, and the tables below and
+[`docs/live-results/tuning.json`](docs/live-results/tuning.json) /
+[`holdout.json`](docs/live-results/holdout.json) hold only clean, complete runs.
+
+**`ten-percent-brain-claim` is better, not fixed.** It no longer asserts the myth: Appraisal now
+correctly extracts the debunking page's own conclusion ("the myth ... is false, his matriculation
+certificate shows ...") instead of the myth restated bare. But the investigation still only ever
+finds that one page genuinely on-topic among everything Collection retrieves, so the evidence pool
+stays too thin, one item, for Reconciliation to confidently call it `refuted` under a standard that
+treats a confident wrong answer as worse than an honest unresolved one. The verdict moved from
+confidently wrong (`supported`, 0.75) to honestly stuck (`insufficient_evidence`, 0.50). That's a
+real improvement in the failure mode, not a fix of the accuracy, and I'm reporting it as exactly
+that rather than rounding it up to "fixed."
+
+**`einstein-failed-maths-claim` regressed, for a reason worth stating rather than hiding.** It passed
+every sweep before this fix, and fails now, cleanly, twice in a row, not a rate-limit artifact. Read
+against what actually happened: Collection retrieves a wide spread of Einstein-adjacent pages, his
+biography, his family, institutions named after him, and typically exactly one page that is
+specifically about the matriculation-certificate myth. Appraisal correctly extracts that one page's
+conclusion and correctly extracts nothing from the others, because they genuinely don't assert
+anything about whether he failed maths, which is exactly what the fix asks it to do. The result is
+the same one-good-source, thin-evidence shape as `ten-percent-brain-claim`, just landing on a case
+that used to have enough incidental supporting pages to clear the confidence bar anyway. I chose not
+to chase this further: loosening how much evidence Reconciliation accepts as sufficient would very
+plausibly fix this one case by making the harness more confident on thin evidence generally, which
+is the opposite of what decision #9 and the analyst brief both exist to enforce, and I have no fresh,
+untuned holdout left to check that trade against. I'm leaving it as a disclosed, understood
+regression rather than a hidden one, and as a concrete next-step candidate: what these two cases
+actually share is a source-selection shortfall upstream of Appraisal, not an Appraisal defect, and
+that's where a real fix belongs.
+
+Net effect across both fixed-code sweeps: 13 of 14 tuning, 12 of 13 holdout, 25 of 27 overall,
+against 14 of 14 and 12 of 13, 26 of 27, before this decision. Raw accuracy is one case lower, and
+both of that sweep's misses now fail the same honest way, an abstention instead of a confident wrong
+answer, on the two cases that share the myth-and-mostly-tangential-sources shape this decision is
+about, one already known to fail it and one that turned out to share the same thin margin once
+checked. I kept the fix. A system that is very slightly less often right and consistently honest
+about the times it isn't is the one this project's own calibration metrics are
+built to prefer over one that's very slightly more often right and occasionally confidently wrong.
+
 ---
 
 ## The benchmark
@@ -425,8 +483,8 @@ memorise those 14 answers.
 
 ## Honest status: what's actually verified and what isn't
 
-**Verified, with commands you can run yourself:** 288 tests pass, `mypy --strict` comes back clean
-across 43 source files, `ruff check` is clean, and a full 42-episode ablation (14 cases times 3
+**Verified, with commands you can run yourself:** 302 tests pass, `mypy --strict` comes back clean
+across 45 source files, `ruff check` is clean, and a full 42-episode ablation (14 cases times 3
 memory modes) runs end to end offline and writes its report. Running `ablate` twice gives
 byte-identical output both times, which is the only reason the numbers below are worth quoting at
 all.
@@ -449,11 +507,28 @@ The one column that's actually telling you something is the last one. `long` mod
 interference that `none` and `short` simply don't, on similarly named subjects, caught and attributed
 automatically. The instrumentation works even when the analyst behind it doesn't.
 
+That's the summary; `runs/results/ablation.md` carries the rest of what the brief asks for, per arm:
+mean steps, mean tool calls and failed tool calls alongside the token cost, assessments to a stable
+verdict and verdict changes, a reward progression (mean cumulative step reward after each step), a
+confidence progression (mean stated probability after each assessment), and every failure type
+listed including the ones sitting at zero. One caveat travels with that table and is printed next to
+it: offline token figures are synthetic estimates from the rehearsed analyst, a fixed count per
+call, not usage a provider measured. The provider-measured token and latency numbers in this
+document are the live sweeps further down, not this one.
+
+**The same comparison also ran once against genuine live reasoning**, 6 cases across all three
+modes rather than 14, because a real memory-ablation sweep costs actual model calls and this project
+runs on a free daily allowance. `long` matched `short`'s accuracy and posted the best calibration of
+the three; its one irrelevant recall produced an overconfidence tag, not a wrong answer or a
+memory-interference tag. Full tables and the honest caveat about sample size and shared-provider
+halts are in [`docs/live-results/memory-ablation.md`](docs/live-results/memory-ablation.md).
+
 That 21% is the machinery running with no reasoning behind it at all, and it stays true for exactly
 that reason: it's the floor, not the ceiling. What the live model itself actually reaches, once it's
-given a real reason to reason and the fixes below are all applied, is decision #12 and #13's story,
-ending in a 14-of-14 tuning sweep and a 12-of-13 sweep against 13 cases none of that tuning ever saw.
-Read on for how the story gets there.
+given a real reason to reason and the fixes below are all applied, is decisions #12 through #14's
+story, ending in a 13-of-14 tuning sweep and a 12-of-13 sweep against 13 cases none of that tuning
+ever saw, both cases it still misses failing honestly rather than confidently. Read on for how the
+story gets there.
 
 **The live path itself is verified now too, on a real case, against a real free model, not
 simulated.** I ran `--live --record` once on `ada-lovelace-person` and it completed five phases in
@@ -530,24 +605,36 @@ behind precisely is the state everything above converged to, and how I checked i
 
 <!-- osint-harness:tuning-summary -->
 **Final sweep, one investigation at a time, exactly matching how the hosted demo runs (it also
-processes one job at a time): 14 of 14, zero halts, zero crashes.**
+processes one job at a time): 13 of 14.** This is the sweep as it stands after decision #14 above;
+the paragraph after the next table says what changed and why one case that used to pass no longer
+does.
 
-| Case | Verdict | Confidence | Steps |
-| --- | --- | --- | --- |
-| anthropic-company | supported | 0.90 | 10 |
-| openai-company | supported | 0.80 | 10 |
-| theranos-company | refuted | 0.95 | 10 |
-| wirecard-company | refuted | 0.92 | 10 |
-| vantage-nebula-company | insufficient_evidence | 0.50 | 10 |
-| ada-lovelace-person | supported | 0.92 | 10 |
-| satya-nadella-person | supported | 0.95 | 10 |
-| john-smith-person | insufficient_evidence | 0.70 | 10 |
-| michael-jordan-researcher-person | supported | 0.80 | 10 |
-| great-wall-from-space-claim | refuted | 0.82 | 10 |
-| einstein-failed-maths-claim | refuted | 0.95 | 10 |
-| einstein-nobel-relativity-claim | partially_supported | 0.95 | 10 |
-| king-of-france-claim | insufficient_evidence | 0.95 | 10 |
-| apollo-11-date-claim | supported | 0.99 | 6 |
+| Case | Expected | Reached | P | Steps | Tool calls (failed) | Latency s | Tokens | Verdict changes | Assessments to stable |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ada-lovelace-person | supported | supported | 0.95 | 10 | 18 (5) | 305 | 26695 | 1 | 1 |
+| anthropic-company | supported | supported | 0.90 | 10 | 18 (6) | 318 | 31326 | 1 | 1 |
+| apollo-11-date-claim | supported | supported | 0.96 | 6 | 9 (1) | 232 | 17270 | 1 | 1 |
+| einstein-failed-maths-claim | refuted | **insufficient_evidence** (wrong) | 0.50 | 10 | 18 (4) | 361 | 25607 | 0 | 0 |
+| einstein-nobel-relativity-claim | partially_supported | partially_supported | 0.95 | 10 | 18 (0) | 227 | 31511 | 1 | 2 |
+| great-wall-from-space-claim | refuted | refuted | 0.92 | 10 | 16 (4) | 394 | 25110 | 1 | 1 |
+| john-smith-person | insufficient_evidence | insufficient_evidence | 0.50 | 10 | 17 (2) | 447 | 46115 | 0 | 0 |
+| king-of-france-claim | insufficient_evidence | insufficient_evidence | 0.90 | 10 | 16 (1) | 103 | 28905 | 0 | 0 |
+| michael-jordan-researcher-person | supported | supported | 0.82 | 10 | 18 (5) | 232 | 24507 | 1 | 2 |
+| openai-company | supported | supported | 0.95 | 10 | 18 (7) | 297 | 31753 | 1 | 1 |
+| satya-nadella-person | supported | supported | 0.95 | 10 | 18 (8) | 238 | 23267 | 1 | 1 |
+| theranos-company | refuted | refuted | 0.92 | 5 | 9 (1) | 42 | 10610 | 1 | 1 |
+| vantage-nebula-company | insufficient_evidence | insufficient_evidence | 0.50 | 10 | 12 (2) | 411 | 24390 | 0 | 0 |
+| wirecard-company | refuted | refuted | 0.90 | 8 | 14 (5) | 323 | 14760 | 1 | 1 |
+| **Total** |  | **13/14** |  | 129 | 219 (51) | 3928 | 361826 | avg 0.71 | avg 0.86 |
+
+Tokens and latency there are what the provider actually reported and the clock actually measured,
+not estimates. Verdict changes and assessments to stable are the convergence pair: how often a
+verdict was revised, and how many assessments it took before it stopped moving. Every column comes
+straight from the stored per-case records,
+[`docs/live-results/tuning.json`](docs/live-results/tuning.json) for this sweep and
+[`docs/live-results/holdout.json`](docs/live-results/holdout.json) for the one below, both written
+from a run directory by
+`python scripts/live_results.py RUN_DIR NAME --json OUT.json --markdown OUT.md [--append]`.
 
 The two cases that took the most iteration were `einstein-nobel-relativity-claim`, wrong on every
 sweep before the "set aside the clause" fix landed, and `john-smith-person`, right on early sweeps
@@ -555,7 +642,9 @@ only because a transient provider error halted it before it ever reasoned, then 
 actually ran to completion, on the same disambiguation mistake the case exists to catch. Both went
 3 for 3 in a focused, repeated re-test once the fix that actually addressed each one landed, and
 correct again here on top of that. That's the evidence this wasn't a lucky single sample: the same
-case, rerun independently, landing the same way every time.
+case, rerun independently, landing the same way every time. `einstein-failed-maths-claim` is the one
+new miss in this table, unrelated to either of those two; decision #14 above is the honest account
+of why, checked clean twice in a row rather than taken on a single sample.
 
 None of this, not one fix, one wording change, or one rerun, was ever checked against the 13
 held-out cases in [`benchmark/holdout.json`](benchmark/holdout.json). The question that actually
@@ -564,48 +653,52 @@ set, run only after every change above was already frozen, comes back with:
 
 **Holdout sweep, same conditions, cases never seen during any of the tuning above: 12 of 13.**
 
-| Case | Verdict | Confidence | Steps |
-| --- | --- | --- | --- |
-| ftx-company | refuted | 0.92 | 10 |
-| enron-company | refuted | 0.92 | 10 |
-| raspberry-pi-company | supported | 0.92 | 10 |
-| quorvane-meridian-company | insufficient_evidence | 0.50 | 10 |
-| marie-curie-person | supported | 0.95 | 10 |
-| jensen-huang-person | supported | 0.95 | 10 |
-| david-jones-person | insufficient_evidence | 0.50 | 10 |
-| michael-collins-astronaut-person | supported | 0.96 | 10 |
-| goldfish-memory-claim | refuted | 0.92 | 10 |
-| armstrong-1968-claim | partially_supported | 0.80 | 10 |
-| eiffel-tower-1889-claim | supported | 0.95 | 10 |
-| german-emperor-claim | insufficient_evidence | 0.95 | 10 |
-| **ten-percent-brain-claim** | **supported** (wrong; expected `refuted`) | 0.75 | 10 |
+| Case | Expected | Reached | P | Steps | Tool calls (failed) | Latency s | Tokens | Verdict changes | Assessments to stable |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| armstrong-1968-claim | partially_supported | partially_supported | 0.95 | 10 | 18 (1) | 221 | 31097 | 1 | 1 |
+| david-jones-person | insufficient_evidence | insufficient_evidence | 0.50 | 10 | 16 (2) | 328 | 26109 | 0 | 0 |
+| eiffel-tower-1889-claim | supported | supported | 0.92 | 10 | 18 (5) | 474 | 28084 | 1 | 1 |
+| enron-company | refuted | refuted | 0.96 | 6 | 9 (4) | 258 | 11774 | 1 | 1 |
+| ftx-company | refuted | refuted | 0.92 | 10 | 18 (7) | 296 | 26239 | 1 | 1 |
+| german-emperor-claim | insufficient_evidence | insufficient_evidence | 0.50 | 7 | 12 (0) | 186 | 14513 | 0 | 0 |
+| goldfish-memory-claim | refuted | refuted | 0.80 | 5 | 9 (2) | 99 | 10753 | 1 | 1 |
+| jensen-huang-person | supported | supported | 0.95 | 10 | 18 (7) | 414 | 29775 | 1 | 1 |
+| marie-curie-person | supported | supported | 0.96 | 10 | 16 (5) | 441 | 25681 | 1 | 1 |
+| michael-collins-astronaut-person | supported | supported | 0.95 | 10 | 18 (4) | 216 | 29478 | 1 | 1 |
+| quorvane-meridian-company | insufficient_evidence | insufficient_evidence | 0.50 | 10 | 16 (3) | 233 | 20207 | 0 | 0 |
+| raspberry-pi-company | supported | supported | 0.90 | 10 | 18 (2) | 272 | 28769 | 1 | 1 |
+| **ten-percent-brain-claim** | refuted | **insufficient_evidence** (wrong) | 0.50 | 10 | 15 (4) | 376 | 40358 | 0 | 0 |
+| **Total** |  | **12/13** |  | 118 | 201 (46) | 3815 | 322837 | avg 0.69 | avg 0.69 |
 
 The same-name trap (`david-jones-person`) and the disambiguation trap
 (`michael-collins-astronaut-person`), the exact two shapes `john-smith-person` and
 `michael-jordan-researcher-person` exist to catch, land correctly on subjects the fix was never run
 against. So does the reason-versus-core-event shape (`armstrong-1968-claim`, right about the
 landing, wrong about the year, correctly `partially_supported`) that `einstein-nobel-relativity-claim`
-took four attempts to reach. Two cases hit a genuine local network fault mid-sweep, `getaddrinfo
-failed`, DNS resolution, not the model or the harness, and I say so rather than quietly dropping
-them: both crashed at step 0 before any reasoning happened, both reran clean once the connection was
-back, and I'm reporting the rerun rather than the network failure because a DNS outage is not a fact
-about whether this harness reasons about the Eiffel Tower correctly.
+took four attempts to reach. Two cases, `eiffel-tower-1889-claim` and `german-emperor-claim`, hit a
+genuine local network fault mid-sweep, `getaddrinfo failed`, DNS resolution, not the model or the
+harness, and I say so rather than quietly dropping them: both crashed at step 0 before any reasoning
+happened, both reran clean once the connection was back, and I'm reporting the rerun rather than the
+network failure because a DNS outage is not a fact about whether this harness reasons about the
+Eiffel Tower correctly.
 
-The one honest miss is worth being precise about rather than waving at. `ten-percent-brain-claim`
-came back `supported` because Appraisal extracted "Humans use only 10 percent of their brains" as an
-assertion from two pages that were actually debunking it, Wikipedia's own
-`Ten-percent-of-the-brain_myth` article and a neuroscience-for-kids page that opens "There is no
-scientific basis" for the claim. Both open by restating the myth before rejecting it, and the
-extraction caught the restatement, not the rejection: it graded those assertions at the lowest
-possible credibility, `CANNOT_BE_JUDGED`, which shows something was already off, but Reconciliation's
-free-text reasoning then called them "high-credibility" anyway and let volume (three restatements
-against one direct refutation) decide it. `goldfish-memory-claim`, the other myth case in this set,
-extracted cleanly, because its sources state the true fact directly ("have a memory span longer than
-three seconds") rather than restating the myth first. I found this by reading the actual retrieved
-document text, not by guessing, and I'm not fixing it now: this is the holdout set, the one sweep
-that has to run only once and only after every other line in this document was already frozen. Taking
-it as a specific piece of future work instead of feeding it back into the prompts is the whole reason
-this table means anything.
+The same fault caught a third case in a way worth stating plainly: `armstrong-1968-claim` halted on
+its last step, on the same `getaddrinfo failed`, after its verdict had already been reached. Its row
+above stands, with the verdict and confidence it actually reported, but this sweep had 1 halt rather
+than none, and the stored record tags that episode `no_convergence` because a halted investigation
+counts as one that never settled, whatever it had already concluded.
+
+The one honest miss here used to be a worse one. `ten-percent-brain-claim` originally came back
+`supported`, confidently wrong, because Appraisal extracted the myth as if the debunking pages that
+mention it were asserting it. That was the specific defect decision #14 above fixes, and this sweep
+is the fixed code's own holdout check on it: the case is still wrong, now `insufficient_evidence` at
+0.50 rather than `supported` at 0.75, for the thin-evidence reason decision #14 explains in full
+rather than a polarity error. `goldfish-memory-claim`, the other myth case in this set, is correct in
+both the old and the fixed code, because its sources state the true fact directly rather than
+restating the myth first, so there was never a restatement for the old bug to catch here. This table
+is the one sweep that has to run only once and only after every other line in this document was
+already frozen; decision #14's own account of what it found and what it chose not to chase was
+written from this same run, not a separate pass.
 
 <!-- /osint-harness:tuning-summary -->
 

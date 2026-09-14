@@ -273,6 +273,10 @@ class Appraisal(Phase):
         prompt = (
             f"{briefing.header()}\n\n{pending}\n\n"
             "Extract the specific assertions these documents make that bear on the question. "
+            "Each assertion is what the document's own author states to be true, in the "
+            "author's voice. When a document reports a claim only to rebut it, attribute it "
+            "to others, or call it a myth or misconception, record what the document "
+            "concludes about that claim, never the claim restated bare. "
             "Every assertion must quote a URL from the list above. Grade each publisher's "
             "reliability A-F and each assertion's credibility 1-6, with your reason."
         )
