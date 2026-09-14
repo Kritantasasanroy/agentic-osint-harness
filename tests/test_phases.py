@@ -151,6 +151,23 @@ class DeadSource(Tool):
         raise httpx.ConnectError("host unreachable")
 
 
+class BlockingPages(Tool):
+    """Pages that refuse this reader at some URLs and read normally at every other one."""
+
+    def __init__(self, blocked: tuple[str, ...]) -> None:
+        super().__init__(Cassette(mode=CassetteMode.RECORD))
+        self._blocked = blocked
+
+    @property
+    def name(self) -> str:
+        return "blocking_pages"
+
+    def retrieve(self, query: str) -> tuple[Document, ...]:
+        if query in self._blocked:
+            raise httpx.HTTPError(f"Client error '403 Forbidden' for url '{query}'")
+        return (Document.retrieved(url=query, title="a page", text="The page reads normally."),)
+
+
 class TestDirection:
     def test_refuses_to_proceed_on_a_single_hypothesis(self) -> None:
         model = ScriptedModel()
@@ -322,6 +339,84 @@ class TestCollection:
 
         failed = [call for call in transition.tool_calls if call.tool == "dead_source"]
         assert failed and failed[0].succeeded is False
+
+    def _reading(self, chosen: tuple[str, ...], proposed: tuple[str, ...] = ()) -> ScriptedModel:
+        model = ScriptedModel()
+        model.script(
+            "collection",
+            CollectionPlan(search_queries=("Acme dissolved",), urls_to_read=proposed),
+        )
+        model.script("reading_choice", ReadingChoice(urls=chosen))
+        return model
+
+    def _hit(self) -> StubSource:
+        return StubSource((Document.retrieved(url=Episode.ARTICLE, title="hit", text="snippet"),))
+
+    def test_a_page_that_refuses_the_reader_gives_its_slot_to_the_next_candidate(self) -> None:
+        """Live runs lost a fifth of all tool calls to pages answering 403, 401 or 404, and each
+        refusal used to spend one of the reading slots anyway, so a round could open four pages
+        and read none. Reading now goes on down the candidates until enough pages actually read.
+
+        One blocked URL, not two: with two blocked plus this many readable, the outer candidate
+        cap (`MAX_READ_ATTEMPTS`) already trims the list to exactly what four successes need, so
+        the inner stop-at-four check never has a spare candidate left to prove it skips. One
+        blocked candidate leaves one readable candidate spare, so a mutant that deletes the
+        stop-at-four check reads it too, and the two assertions below start disagreeing."""
+        blocked = tuple(f"https://blocked.example/{n}" for n in range(1))
+        readable = tuple(f"https://open.example/{n}" for n in range(5))
+        investigation = Episode.opened()
+
+        transition = Collection(
+            self._reading(blocked + readable), StubSource(()), BlockingPages(blocked), self._hit()
+        ).advance(investigation)
+
+        reads = [call for call in transition.tool_calls if call.tool == "blocking_pages"]
+        assert sum(call.succeeded for call in reads) == Collection.MAX_READS
+        assert len(reads) == len(blocked) + Collection.MAX_READS
+        assert readable[-1] not in [call.query for call in reads]
+
+    def test_reading_stops_once_enough_pages_succeed_even_with_candidates_left(self) -> None:
+        """Isolates the stop-at-four check with no failures in the mix: six candidates would all
+        succeed if tried, so only the check itself, not a run of refusals, explains two going
+        untried."""
+        readable = tuple(f"https://open.example/{n}" for n in range(6))
+        investigation = Episode.opened()
+
+        transition = Collection(
+            self._reading(readable), StubSource(()), BlockingPages(()), self._hit()
+        ).advance(investigation)
+
+        reads = [call for call in transition.tool_calls if call.tool == "blocking_pages"]
+        assert len(reads) == Collection.MAX_READS
+        assert all(call.succeeded for call in reads)
+
+    def test_refused_pages_cannot_run_the_tool_budget_down_unbounded(self) -> None:
+        blocked = tuple(f"https://blocked.example/{n}" for n in range(12))
+        investigation = Episode.opened()
+
+        transition = Collection(
+            self._reading(blocked), StubSource(()), BlockingPages(blocked), self._hit()
+        ).advance(investigation)
+
+        reads = [call for call in transition.tool_calls if call.tool == "blocking_pages"]
+        assert len(reads) == Collection.MAX_READ_ATTEMPTS
+
+    def test_a_url_the_analyst_already_named_is_opened_before_ones_search_turned_up(self) -> None:
+        """Unchanged from before this method started retrying past failures: a URL the analyst
+        already had a specific reason to name, such as a citation it already knows about, is not
+        one a pile of search hits should be able to crowd out of the reading budget."""
+        guessed = "https://named.example/already-known"
+        investigation = Episode.opened()
+
+        transition = Collection(
+            self._reading((Episode.ARTICLE,), proposed=(guessed,)),
+            StubSource(()),
+            BlockingPages(()),
+            self._hit(),
+        ).advance(investigation)
+
+        reads = [call.query for call in transition.tool_calls if call.tool == "blocking_pages"]
+        assert reads == [guessed, Episode.ARTICLE]
 
 
 class TestAppraisal:

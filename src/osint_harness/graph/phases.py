@@ -143,6 +143,7 @@ class Collection(Phase):
     MAX_SEARCHES = 3
     MAX_LOOKUPS = 2
     MAX_READS = 4
+    MAX_READ_ATTEMPTS = 6
 
     def __init__(
         self, model: ModelClient, encyclopedia: Tool, pages: Tool, web_search: Tool
@@ -172,8 +173,14 @@ class Collection(Phase):
             calls.append(call)
             hits.extend(found)
 
+        read = 0
         for url in self._urls_to_read(investigation, plan.urls_to_read, hits):
-            calls.append(self._retrieve(self._pages, url, investigation))
+            if read >= self.MAX_READS:
+                break
+            call = self._retrieve(self._pages, url, investigation)
+            calls.append(call)
+            if call.succeeded:
+                read += 1
 
         for lead in investigation.open_leads():
             lead.pursue()
@@ -195,7 +202,14 @@ class Collection(Phase):
         proposed: tuple[str, ...],
         hits: list[Document],
     ) -> tuple[str, ...]:
-        """Pick what to actually open. Choosing badly here is a source-selection failure."""
+        """Pick what to try opening, in order. Choosing badly here is a source-selection failure.
+
+        A URL the analyst already named takes priority over one search merely turned up, same as
+        before this method started retrying past failures. Live runs lost a fifth of all tool calls
+        to pages answering 403, 401 or 404, so more candidates are listed than there are reading
+        slots, and `conduct` keeps going down the list until enough pages actually read, up to a
+        fixed cap, instead of stopping at the first refusal.
+        """
         chosen = list(proposed)
         if hits:
             listing = "\n".join(f"- {hit.url} — {hit.title}" for hit in hits)
@@ -215,7 +229,7 @@ class Collection(Phase):
         for url in chosen:
             if url not in investigation.documents:
                 seen[url] = None
-        return tuple(seen)[: self.MAX_READS]
+        return tuple(seen)[: self.MAX_READ_ATTEMPTS]
 
     def _search(self, query: str) -> tuple[ToolCall, tuple[Document, ...]]:
         """Search for candidate leads. A hit is never recorded as evidence directly — only a page

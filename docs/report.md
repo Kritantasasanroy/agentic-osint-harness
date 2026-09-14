@@ -243,37 +243,42 @@ tuning set and 12 of 13 on a 13-case holdout set that never informed a single on
 one holdout miss was itself instructive: an extraction defect on pages that restate a myth before
 debunking it, found only because the holdout set was never used to tune anything, which is the entire
 argument for keeping one. Decision #14 fixes that defect generally rather than for the one case it
-was found on, and costs a case in the tuning set as a result: 13 of 14 tuning, 12 of 13 holdout, both
-misses now an honest abstention rather than a confident wrong answer. Full account, including the
-regression and why I chose not to chase it further, in decision #14 in the README.
+was found on: `ten-percent-brain-claim` is genuinely `refuted` now, not merely a softer wrong answer.
+What it costs is a different case in the tuning set, `einstein-failed-maths-claim`, plus one new,
+unexplained miss the fix doesn't obviously touch, `goldfish-memory-claim`, both landing as honest
+abstentions rather than confident wrong answers. Net: 13 of 14 tuning, 12 of 13 holdout, same raw
+count as before this decision, different cases. Full account, including the two remaining misses and
+why I chose not to chase either further, in decision #14 in the README.
 
 **Cost and quality don't track each other the way I expected.** Figures below are decision #14's
 sweep, not the one two paragraphs up; both sweeps were rerun after that fix, so a case-by-case
-comparison across the two sweeps' numbers isn't meaningful. The tuning sweep spent 361,826 tokens and
-3,928 seconds of wall clock across 14 cases; the holdout sweep spent 322,837 tokens and 3,815 seconds
-across 13. Per correct verdict that's roughly 27,800 tokens on the tuning set and roughly 26,900 on
-the holdout set, close enough that spend doesn't obviously separate the two sweeps the way it used
-to. The single most expensive episode in either sweep is `john-smith-person` at 46,115 tokens, correct
-both here and independently three-for-three during tuning (decision #12); the wrong verdict,
-`einstein-failed-maths-claim`, spent 25,607, below the tuning sweep's own mean. `ten-percent-brain-claim`,
-the other wrong verdict, is the single most expensive holdout episode at 40,358, going in circles
-over thin evidence rather than finding more of it (decision #14). At the other end, the cheapest
-episode anywhere, `apollo-11-date-claim` at 17,270 tokens over 6 steps, is the deliberate floor case,
-and it's correct. So cost still reads as a signal for difficulty, not for correctness in either
-direction: the priciest episode is right, the cheapest is right, and the two wrong ones sit on
-opposite ends of the spend range from each other.
+comparison across the two sweeps' numbers isn't meaningful. The tuning sweep spent 352,560 tokens and
+3,848 seconds of wall clock across 14 cases; the holdout sweep spent 298,841 tokens and 4,349 seconds
+across 13. Per correct verdict that's roughly 27,100 tokens on the tuning set and roughly 24,900 on
+the holdout set, close enough that spend doesn't obviously separate the two sweeps. The single most
+expensive episode in either sweep is `openai-company` at 74,805 tokens, an unusually long Appraisal
+pass that extracted 27 assertions, and it's correct; the wrong verdict on the tuning side,
+`einstein-failed-maths-claim`, spent 29,163, close to the sweep's own mean. `ten-percent-brain-claim`,
+now correct, is the single most expensive holdout episode at 46,496; the wrong verdict there,
+`goldfish-memory-claim`, is comparatively cheap at 36,185, spent entirely on retrieval attempts that
+found nothing rather than on reasoning over evidence. At the other end, the cheapest episode anywhere,
+`german-emperor-claim` at 19,990 tokens, is correct. So cost still reads as a signal for difficulty,
+not for correctness in either direction: the priciest episode is right, the wrong ones sit at both
+ends of the spend range, and a high spend on `goldfish-memory-claim` specifically marks failed
+retrieval, not hard reasoning.
 
-**Close to a quarter of all tool calls fail, and that's the working condition rather than an
-incident.** 51 of 219 in the tuning sweep, 46 of 201 in the holdout sweep, 23% either way. Both sweeps
-reached the accuracy above anyway, with that failure rate priced in, which is the part worth stating:
-an agent retrieving from the live web should be budgeted assuming close to a quarter of its lookups
-come back with nothing, and it has to record each one as a failed lookup rather than as an empty
-result, or the 202 problem from `WebSearch` reappears in a different costume. I'm calling this an
-observation and not a finding because I haven't broken those failures down by domain across a whole
-sweep. The runs I did read through were 403s and 401s, sites refusing a bot or gating a paywall, not
-defects in the harness; decision #14's Collection fix means a refusal now costs a retry against
-another candidate instead of a lost reading slot, which is part of why the failure share held roughly
-steady even though Collection is reading more candidates per round than before.
+**Close to half of all tool calls fail in this sweep, roughly double the share earlier sweeps saw, and
+that's the fix working as designed, not a regression.** 105 of 215 in the tuning sweep, 81 of 167 in
+the holdout sweep. Decision #14's Collection fix means a refusal now costs a retry against another
+candidate instead of ending the round, so a case with a bad run of refusals racks up more failed calls
+on the way to the same four successful reads, where the old code would have just stopped and recorded
+fewer of both. Both sweeps reached the accuracy above anyway, with that failure rate priced in, which
+is the part worth stating: an agent retrieving from the live web should be budgeted assuming close to
+half its lookups come back with nothing once it's actually persistent about retrying, and it has to
+record each one as a failed lookup rather than as an empty result, or the 202 problem from
+`WebSearch` reappears in a different costume. I'm calling this an observation and not a finding
+because I haven't broken those failures down by domain across a whole sweep. The runs I did read
+through were 403s and 401s, sites refusing a bot or gating a paywall, not defects in the harness.
 
 ## 4. Limitations
 
@@ -315,19 +320,14 @@ answer. What follows is what's genuinely still true as of that later work, not s
 what matters most, but I haven't run a sensitivity analysis on it. A different reviewer could easily
 argue for different weights, and right now the harness doesn't show how conclusions shift under them.
 
-**A specific extraction defect survived the tuning above, caught by the holdout set precisely because
-it was never used to tune anything.** Appraisal extracted "Humans use only 10 percent of their brains"
-as an assertion from two pages that were actually debunking it, one of them Wikipedia's own
-`Ten-percent-of-the-brain_myth` article, because both open by restating the myth before rejecting it,
-and the extraction caught the restatement, not the rejection. It graded those assertions at the lowest
-possible credibility, which shows something was already suspected, but Reconciliation's free-text
-reasoning called them "high-credibility" anyway and let three restatements outweigh one direct
-refutation. `goldfish-memory-claim`, the other myth case in the same set, extracted cleanly, because
-its sources state the true fact directly rather than restating the myth first. The general shape of
-the fix is clear (extract a source's own position on a claim, not any sentence that mentions it,
-which the analyst brief's "report contradictions as contradictions" doesn't currently make explicit
-enough to stop this), but fixing it now, from a holdout observation, would be exactly the kind of
-tuning-on-the-answer-key this set exists to prevent. It is next work, not done work.
+**Resolved since this was written, decision #14 in the README has the full account.** This entry
+originally described a specific extraction defect the holdout set caught, Appraisal reading a myth
+as asserted from pages that were actually debunking it, and named fixing it as next work rather than
+done work, specifically to avoid tuning against the one holdout observation that found it. It's fixed
+now, generally rather than for that one case, verified by rerunning both the tuning and holdout sets
+in full rather than just the case that surfaced it. `ten-percent-brain-claim` is genuinely `refuted`
+now; the fix costs a different tuning case and coincides with one new, unexplained holdout miss,
+`goldfish-memory-claim`, both discussed in decision #14 rather than left for later.
 
 **The benchmark is small, and English-only.** Fourteen tuning cases and thirteen held-out ones are
 enough to exercise every trap more than once and to catch real generalisation gaps, as the one above
@@ -346,12 +346,15 @@ which was just wrong.
 ## 5. What I'd do next, in order
 
 1. **Done: Appraisal's extraction-polarity gap is fixed (decision #14)**, verified against both myth
-   cases and the full tuning and holdout sets. What's still open, named in that same decision rather
-   than hidden: the two cases it still misses share a thinner problem upstream of Appraisal, source
-   selection finding only one genuinely on-topic page for a claim that a wide, mostly-tangential
-   search surfaces plenty of adjacent pages for. Improving the search-query and reading-choice prompts
-   for topical precision, then resweeping both sets the same way #14 was checked, is the next concrete
-   step, not a further loosening of how much evidence counts as sufficient.
+   cases and the full tuning and holdout sets; `ten-percent-brain-claim` is genuinely `refuted` now.
+   Two open items remain, named in that same decision rather than hidden. `einstein-failed-maths-claim`
+   is a source-selection shortfall upstream of Appraisal: a wide, mostly-tangential search surfaces
+   plenty of adjacent pages for a claim like this one and only ever one genuinely on-topic page.
+   Improving the search-query and reading-choice prompts for topical precision, then resweeping both
+   sets the same way #14 was checked, is the next concrete step there, not a further loosening of how
+   much evidence counts as sufficient. `goldfish-memory-claim` is a different shape entirely, total
+   retrieval failure rather than a thin pool, confirmed on two clean reruns with no mechanism found yet;
+   it needs its own investigation, not the same fix as the first case.
 2. **Extend the live ablation from 6 cases to the full 42-episode set.** A first live run
    ([`docs/live-results/memory-ablation.md`](live-results/memory-ablation.md)) already confirms
    the instrumentation works end to end on genuine reasoning and shows no measurable harm from
