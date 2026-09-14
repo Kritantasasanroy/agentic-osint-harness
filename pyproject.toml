@@ -19,6 +19,7 @@ dev = [
     "ruff>=0.5",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
+    "pypdf>=5.0",
 ]
 
 [project.scripts]
@@ -41,7 +42,7 @@ disallow_untyped_decorators = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "web/backend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "ARG", "PL", "RUF"]
@@ -52,4 +53,4 @@ ignore = ["PLR0913"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "web/backend"]

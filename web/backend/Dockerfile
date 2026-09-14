@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY --chown=user src ./src
 COPY --chown=user benchmark ./benchmark
-COPY --chown=user web/backend/app.py .
+COPY --chown=user web/backend/app.py web/backend/documents.py ./
 
 EXPOSE 7860
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-7860}"]

@@ -30,11 +30,23 @@
     font-size: 15px;
   }
   .wrap { max-width: 1000px; margin: 0 auto; }
-  header { margin-bottom: 22px; }
+  header { margin-bottom: 18px; }
   h1 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.01em; }
-  .sub { color: var(--dim); margin: 0; max-width: 70ch; }
+  .sub { color: var(--dim); margin: 0; max-width: 72ch; }
   .sub a { color: var(--accent); text-decoration: none; }
   .sub a:hover { text-decoration: underline; }
+
+  .availability { color: var(--dim); font-size: 0.88rem; margin: 0 0 14px; min-height: 1.4em; }
+  .availability code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab {
+    width: auto; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--dim); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .tab.active { background: var(--panel); color: var(--text); border-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .count { color: var(--dim); font-weight: 500; }
 
   .panel {
     background: var(--panel);
@@ -58,25 +70,42 @@
   button { border: none; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .primary { background: var(--accent); color: #05101c; }
   .ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  button.small { width: auto; padding: 6px 11px; font-size: 0.84rem; }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
   button:hover:not(:disabled) { filter: brightness(1.1); }
 
-  .status-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap;
-                color: var(--dim); font-size: 0.88rem; }
+  .status-row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
 
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px;
-          font-size: 0.78rem; font-weight: 600; }
-  .pill.live { background: rgba(79,179,131,0.16); color: var(--good); }
-  .pill.off { background: rgba(224,102,94,0.16); color: var(--bad); }
-  .pill.ok { background: rgba(79,179,131,0.16); color: var(--good); }
+          font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+  .pill.live, .pill.ok { background: rgba(79,179,131,0.16); color: var(--good); }
+  .pill.off { background: rgba(143,152,169,0.14); color: var(--dim); }
   .pill.miss { background: rgba(224,102,94,0.16); color: var(--bad); }
+  .pill.warn { background: rgba(217,164,65,0.16); color: var(--warn); }
+  .pill.run { background: rgba(110,168,254,0.14); color: var(--accent); }
 
-  #status { margin-top: 12px; color: var(--dim); font-size: 0.9rem; }
-  #status.err { color: var(--bad); }
-  .info { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.88rem;
-          background: rgba(110,168,254,0.08); color: var(--text); border: 1px solid var(--border); }
+  .drop {
+    position: relative; display: flex; flex-direction: column; gap: 4px; align-items: center;
+    justify-content: center; text-align: center; padding: 26px 16px; margin-bottom: 12px;
+    border: 1.5px dashed var(--border); border-radius: 10px; background: var(--panel2); cursor: pointer;
+  }
+  .drop:hover, .drop.over, .drop:focus-within { border-color: var(--accent); }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .drop strong { word-break: break-word; }
+  .drop span { color: var(--dim); font-size: 0.88rem; }
+  .note { color: var(--dim); font-size: 0.86rem; margin: 12px 0 0; }
 
-  /* phase rail */
+  .library { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .doc { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .doc.selected { border-color: var(--accent); }
+  .doc-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .doc-name { font-weight: 650; word-break: break-word; }
+  .doc-line { margin: 8px 0 0; word-break: break-word; }
+  .doc-foot { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap;
+              margin-top: 10px; color: var(--dim); font-size: 0.82rem; }
+  .doc-actions { display: flex; gap: 6px; }
+  .empty { color: var(--dim); margin: 0; }
+
   .rail { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
   .step { flex: 1; min-width: 96px; padding: 8px 10px; border-radius: 8px; background: var(--panel2);
           border: 1px solid var(--border); font-size: 0.78rem; color: var(--dim); text-align: center;
@@ -85,11 +114,19 @@
                  font-weight: 600; }
   .step.done { color: var(--good); border-color: rgba(79,179,131,0.4); }
 
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+  .status { margin-top: 12px; color: var(--dim); font-size: 0.9rem; }
+  .status:empty { display: none; }
+  .dim { color: var(--dim); }
+  .err, .status.err { color: var(--bad); }
+  .info { margin-top: 10px; padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; word-break: break-word;
+          background: rgba(110,168,254,0.08); color: var(--text); border: 1px solid var(--border); }
+
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-top: 16px; }
   .metric { background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; padding: 12px; }
   .metric .k { color: var(--dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: .04em; }
-  .metric .v { font-size: 1.15rem; font-weight: 650; margin-top: 3px; }
+  .metric .v { font-size: 1.1rem; font-weight: 650; margin-top: 3px; }
 
+  .report { margin-top: 16px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
   .report h1, .report h2, .report h3 { border-bottom: 1px solid var(--border); padding-bottom: 6px;
                                        margin-top: 26px; }
   .report table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.88rem;
@@ -101,7 +138,7 @@
   .report a { color: var(--accent); }
   .report blockquote { border-left: 3px solid var(--border); margin-left: 0; padding-left: 14px;
                        color: var(--dim); }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   footer { color: var(--dim); font-size: 0.83rem; margin-top: 36px; text-align: center; }
   footer a { color: var(--accent); }
 </style>
@@ -111,159 +148,329 @@
   <header>
     <h1>Agentic OSINT Harness</h1>
     <p class="sub">
-      Pick a company, a person, or a claim. The agent plans lines of enquiry, searches the live web,
-      reads what it finds, grades every publisher and every assertion on the Admiralty scale, weighs
-      competing hypotheses by what disconfirms them, and reflects before committing to a verdict with
-      a calibrated confidence. Every citation traces back to a document it actually retrieved, live,
-      while you watch. There is no offline stand-in on this path.
-      <a href="https://github.com/Kritantasasanroy/agentic-osint-harness" target="_blank">Source on GitHub</a>.
+      Pick a company, a person, or a claim, or upload a document and it will check the main claim the
+      document makes. The agent plans lines of enquiry, searches the live web, reads what it finds,
+      grades every publisher and every assertion on the Admiralty scale, weighs competing hypotheses
+      by what disconfirms them, and reflects before committing to a verdict with a calibrated
+      confidence. Every citation traces back to a document it actually retrieved, live, while you
+      watch. There is no offline stand-in on this path.
+      <a href="https://github.com/Kritantasasanroy/agentic-osint-harness" target="_blank" rel="noopener">Source on GitHub</a>.
     </p>
   </header>
 
-  <div class="panel">
+  <p class="availability" id="availability"></p>
+
+  <div class="tabs" role="tablist" aria-label="What to investigate">
+    <button class="tab active" role="tab" id="tab-cases" aria-controls="panel-cases" aria-selected="true">Benchmark cases</button>
+    <button class="tab" role="tab" id="tab-upload" aria-controls="panel-upload" aria-selected="false">Check a document</button>
+    <button class="tab" role="tab" id="tab-library" aria-controls="panel-library" aria-selected="false">My documents <span class="count" id="libraryCount"></span></button>
+  </div>
+
+  <section class="panel" id="panel-cases" role="tabpanel" aria-labelledby="tab-cases">
     <div class="controls">
-      <select id="caseSelect"><option>loading cases…</option></select>
-      <select id="memorySelect">
+      <select id="caseSelect" aria-label="Benchmark case"><option>loading cases…</option></select>
+      <select id="memorySelect" aria-label="Memory mode">
         <option value="none">memory: none</option>
         <option value="short" selected>memory: short</option>
         <option value="long">memory: long</option>
       </select>
-      <button id="runBtn" class="primary">Investigate</button>
+      <button id="runBtn" class="primary" disabled>Investigate</button>
     </div>
     <div class="status-row">
-      <span id="availability"></span>
-      <button id="ablateBtn" class="ghost" style="width:auto;padding:7px 12px;font-size:0.85rem;">
-        Memory ablation (offline comparison, 42 episodes)
-      </button>
+      <button id="ablateBtn" class="ghost small">Memory ablation (offline comparison, 42 episodes)</button>
     </div>
-    <div class="rail hidden" id="rail"></div>
-    <div id="status"></div>
-    <div class="info hidden" id="info"></div>
-  </div>
+    <div class="result">
+      <div class="rail hidden" data-part="rail"></div>
+      <div class="status" data-part="status"></div>
+      <div class="info hidden" data-part="info"></div>
+      <div class="metrics hidden" data-part="metrics"></div>
+      <div class="report hidden" data-part="report"></div>
+    </div>
+  </section>
 
-  <div class="panel hidden" id="metricsPanel">
-    <div class="metrics" id="metrics"></div>
-  </div>
+  <section class="panel hidden" id="panel-upload" role="tabpanel" aria-labelledby="tab-upload">
+    <label class="drop" id="dropZone" for="fileInput">
+      <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,.html,.htm" />
+      <strong id="fileName">Choose a document</strong>
+      <span id="fileHint">PDF, Word (.docx), HTML, Markdown or plain text, up to 5 MB. Or drop it here.</span>
+    </label>
+    <button id="checkBtn" class="primary" disabled>Check document</button>
+    <p class="note">
+      The agent reads your document, picks out the main factual claim it makes, and checks that claim
+      against sources it finds on the live web. The document never counts as evidence for its own
+      claim. Its text is sent to the model provider and the claim to a search API, so please don't
+      upload anything confidential. The list of your documents is kept in this browser only.
+    </p>
+    <div class="result">
+      <div class="rail hidden" data-part="rail"></div>
+      <div class="status" data-part="status"></div>
+      <div class="info hidden" data-part="info"></div>
+      <div class="metrics hidden" data-part="metrics"></div>
+      <div class="report hidden" data-part="report"></div>
+    </div>
+  </section>
 
-  <div class="panel hidden report" id="reportPanel">
-    <div id="reportBody"></div>
-  </div>
+  <section class="panel hidden" id="panel-library" role="tabpanel" aria-labelledby="tab-library">
+    <p class="empty" id="libraryEmpty">No documents yet. Check one and it will be listed here with its verdict.</p>
+    <ul class="library" id="libraryList"></ul>
+    <div class="result">
+      <div class="rail hidden" data-part="rail"></div>
+      <div class="status" data-part="status"></div>
+      <div class="info hidden" data-part="info"></div>
+      <div class="metrics hidden" data-part="metrics"></div>
+      <div class="report hidden" data-part="report"></div>
+    </div>
+  </section>
 </div>
 
 <footer>
   A live investigation runs six phases and can loop back for more evidence, so it takes several
-  minutes and roughly a dozen model calls, shared across everyone visiting today. The backend sleeps
+  minutes and a dozen or more model calls, shared across everyone visiting today. The backend sleeps
   when idle, so the very first request may take up to a minute to wake it.
 </footer>
 
 <script>
 const API = "https://osint-harness-api.onrender.com";
-const PHASES = ["direction", "collection", "reading_choice", "appraisal", "reconciliation", "reflection", "dissemination"];
+const CASE_PHASES = ["direction", "collection", "reading_choice", "appraisal", "reconciliation", "reflection", "dissemination"];
+const DOCUMENT_PHASES = ["intake", ...CASE_PHASES];
+const LIBRARY_KEY = "osint-harness.documents.v1";
+const TAB_KEY = "osint-harness.tab";
+const MAX_UPLOAD_BYTES = 5000000;
+const POLL_MS = 2500;
 
-const el = (id) => document.getElementById(id);
-const caseSelect = el("caseSelect"), memorySelect = el("memorySelect");
-const runBtn = el("runBtn"), ablateBtn = el("ablateBtn"), statusEl = el("status");
-const railEl = el("rail"), infoEl = el("info"), availabilityEl = el("availability");
-const metricsPanel = el("metricsPanel"), metricsEl = el("metrics");
-const reportPanel = el("reportPanel"), reportBody = el("reportBody");
+const $ = (id) => document.getElementById(id);
+const caseSelect = $("caseSelect"), memorySelect = $("memorySelect"), runBtn = $("runBtn"), ablateBtn = $("ablateBtn");
+const fileInput = $("fileInput"), dropZone = $("dropZone"), fileName = $("fileName"), fileHint = $("fileHint"), checkBtn = $("checkBtn");
+const libraryList = $("libraryList"), libraryEmpty = $("libraryEmpty"), libraryCount = $("libraryCount");
+const availability = $("availability");
 
-let polling = null;
 let liveReady = false;
+let caseBusy = false;
+let uploadBusy = false;
+let uploadFollowing = null;
+let libraryViewing = null;
+const watching = new Set();
 
-function setStatus(text, isError) {
-  statusEl.textContent = text || "";
-  statusEl.classList.toggle("err", Boolean(isError));
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+const words = (value) => String(value ?? "").replaceAll("_", " ");
+const percent = (probability) => `${Math.round(Number(probability) * 100)}%`;
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function showInfo(text) {
-  infoEl.textContent = text || "";
-  infoEl.classList.toggle("hidden", !text);
+class View {
+  constructor(section) {
+    this.rail = section.querySelector('[data-part="rail"]');
+    this.status = section.querySelector('[data-part="status"]');
+    this.info = section.querySelector('[data-part="info"]');
+    this.metrics = section.querySelector('[data-part="metrics"]');
+    this.report = section.querySelector('[data-part="report"]');
+  }
+  setStatus(text, isError = false) {
+    this.status.textContent = text || "";
+    this.status.classList.toggle("err", Boolean(isError));
+  }
+  showInfo(text) {
+    this.info.textContent = text || "";
+    this.info.classList.toggle("hidden", !text);
+  }
+  drawRail(phases, current, seen) {
+    this.rail.classList.remove("hidden");
+    this.rail.innerHTML = phases
+      .map((phase) => `<div class="step ${phase === current ? "active" : seen.has(phase) ? "done" : ""}">${escapeHtml(words(phase))}</div>`)
+      .join("");
+  }
+  hideRail() { this.rail.classList.add("hidden"); }
+  showMetrics(cells) {
+    this.metrics.innerHTML = cells
+      .map(([key, value]) => `<div class="metric"><div class="k">${escapeHtml(key)}</div><div class="v">${value}</div></div>`)
+      .join("");
+    this.metrics.classList.remove("hidden");
+  }
+  showReport(markdown) {
+    // The dossier quotes text from pages the agent fetched off live search results, and a document
+    // report quotes the visitor's own upload, so both are untrusted input. marked ships no
+    // sanitiser, and injected markup could change what a report appears to say while the JSON
+    // record stays clean, which is the one thing this project cannot let happen.
+    this.report.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+    this.report.classList.remove("hidden");
+  }
+  clear() {
+    this.hideRail();
+    this.setStatus("");
+    this.showInfo("");
+    this.metrics.classList.add("hidden");
+    this.report.classList.add("hidden");
+  }
 }
 
-function setBusy(busy) {
-  [runBtn, ablateBtn, caseSelect, memorySelect].forEach((n) => (n.disabled = busy));
-  runBtn.textContent = busy ? "Investigating…" : "Investigate";
-  if (!busy) runBtn.disabled = !liveReady;
+const caseView = new View($("panel-cases"));
+const uploadView = new View($("panel-upload"));
+const libraryView = new View($("panel-library"));
+
+const library = {
+  entries() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      return [];
+    }
+  },
+  save(entries) {
+    try {
+      localStorage.setItem(LIBRARY_KEY, JSON.stringify(entries));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  },
+  get(id) { return this.entries().find((entry) => entry.id === id) || null; },
+  add(entry) { return this.save([...this.entries(), entry]); },
+  update(id, changes) {
+    const entries = this.entries();
+    const entry = entries.find((candidate) => candidate.id === id);
+    if (!entry) return null;
+    Object.assign(entry, changes);
+    this.save(entries);
+    return entry;
+  },
+  remove(id) { this.save(this.entries().filter((entry) => entry.id !== id)); },
+};
+
+function refreshButtons() {
+  runBtn.disabled = !liveReady || caseBusy;
+  runBtn.textContent = caseBusy ? "Investigating…" : "Investigate";
+  ablateBtn.disabled = caseBusy;
+  caseSelect.disabled = caseBusy;
+  memorySelect.disabled = caseBusy;
+  checkBtn.disabled = !liveReady || uploadBusy || !fileInput.files.length;
+  checkBtn.textContent = uploadBusy ? "Checking…" : "Check document";
 }
 
-function drawRail(current, seen) {
-  railEl.classList.remove("hidden");
-  railEl.innerHTML = PHASES.map((p) => {
-    const cls = p === current ? "active" : seen.has(p) ? "done" : "";
-    return `<div class="step ${cls}">${p.replace("_", " ")}</div>`;
-  }).join("");
+function progressText(job) {
+  const calls = `${job.calls_made} model call${job.calls_made === 1 ? "" : "s"}`;
+  const doing = job.phase === "starting" ? "Queued, waiting to start" : `Running ${words(job.phase)}`;
+  return `${doing} · ${calls} · ${Math.round(job.elapsed_seconds)}s elapsed`;
+}
+
+function watchJob(jobId, on) {
+  let misses = 0;
+  let closed = false;
+  const close = () => {
+    closed = true;
+    clearInterval(timer);
+    watching.delete(jobId);
+  };
+  const tick = async () => {
+    let job;
+    try {
+      const res = await fetch(`${API}/api/jobs/${encodeURIComponent(jobId)}`);
+      if (closed) return;
+      if (res.status === 404) {
+        close();
+        on.lost();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      job = await res.json();
+      misses = 0;
+    } catch (err) {
+      // One failed tick is nothing: the next one retries an idempotent read. A run of them means the
+      // backend is unreachable, and leaving the page on a frozen phase would strand whoever is watching.
+      if (closed || ++misses < 5) return;
+      close();
+      on.stalled(err);
+      return;
+    }
+    if (closed) return;
+    if (job.state === "running") {
+      on.running(job);
+      return;
+    }
+    close();
+    if (job.state === "failed") on.failed(job);
+    else on.finished(job);
+  };
+  watching.add(jobId);
+  const timer = setInterval(tick, POLL_MS);
+  tick();
 }
 
 async function loadHealth() {
   try {
     const h = await (await fetch(`${API}/api/health`)).json();
     liveReady = h.live_available && h.live_calls_remaining > 0;
-    runBtn.disabled = !liveReady;
     if (!h.live_available) {
-      availabilityEl.innerHTML = '<span class="pill off">not configured</span> this instance has no API key, so it cannot run investigations';
+      availability.innerHTML = '<span class="pill off">not configured</span> this instance has no API key, so it cannot run investigations';
     } else if (h.live_calls_remaining <= 0) {
-      availabilityEl.innerHTML = '<span class="pill off">allowance spent</span> today’s shared live calls are used up, resets at midnight UTC';
+      availability.innerHTML = '<span class="pill off">allowance spent</span> today’s shared live calls are used up, resets at midnight UTC';
     } else {
-      availabilityEl.innerHTML = `<span class="pill live">live</span> ${h.live_calls_remaining} model calls left today · <code>${h.model}</code>`;
+      availability.innerHTML = `<span class="pill live">live</span> ${escapeHtml(h.live_calls_remaining)} model calls left today · <code>${escapeHtml(h.model)}</code>`;
     }
   } catch (err) {
-    availabilityEl.textContent = "";
+    availability.textContent = "";
   }
+  refreshButtons();
 }
 
 async function loadCases() {
   try {
     const cases = await (await fetch(`${API}/api/cases`)).json();
     caseSelect.innerHTML = cases
-      .map((c) => `<option value="${c.case_id}">${c.subject} — trap: ${c.trap}</option>`)
+      .map((c) => `<option value="${escapeHtml(c.case_id)}">${escapeHtml(c.subject)} — trap: ${escapeHtml(c.trap)}</option>`)
       .join("");
-    setStatus(`${cases.length} benchmark cases loaded. Pick one and investigate.`);
+    caseView.setStatus(`${cases.length} benchmark cases loaded. Pick one and investigate.`);
     loadHealth();
   } catch (err) {
-    setStatus("Waking the backend up (it sleeps when idle)… retrying.", true);
+    caseView.setStatus("Waking the backend up (it sleeps when idle)… retrying.", true);
     setTimeout(loadCases, 4000);
   }
 }
 
-function renderMetrics(o) {
-  const cells = [
-    ["Verdict", `${o.reached} ${o.correct ? '<span class="pill ok">correct</span>' : `<span class="pill miss">expected ${o.expected}</span>`}`],
-    ["Confidence", `${(o.probability * 100).toFixed(0)}%`],
-    ["Brier", o.brier.toFixed(3)],
-    ["Steps", o.steps_taken],
-    ["Tool calls", o.tool_calls],
-    ["Tokens", o.tokens.toLocaleString()],
-    ["Sources", o.source_diversity],
-    ["Evidence", o.evidence_count],
-    ["Failure tag", o.failure],
+function outcomeCells(o) {
+  const verdict = o.correct
+    ? '<span class="pill ok">correct</span>'
+    : `<span class="pill miss">expected ${escapeHtml(words(o.expected))}</span>`;
+  return [
+    ["Verdict", `${escapeHtml(words(o.reached))} ${verdict}`],
+    ["Confidence", percent(o.probability)],
+    ["Brier", escapeHtml(Number(o.brier).toFixed(3))],
+    ["Steps", escapeHtml(o.steps_taken)],
+    ["Tool calls", escapeHtml(o.tool_calls)],
+    ["Tokens", escapeHtml(Number(o.tokens).toLocaleString())],
+    ["Sources", escapeHtml(o.source_diversity)],
+    ["Evidence", escapeHtml(o.evidence_count)],
+    ["Failure tag", escapeHtml(words(o.failure))],
   ];
-  metricsEl.innerHTML = cells
-    .map(([k, v]) => `<div class="metric"><div class="k">${k}</div><div class="v">${v}</div></div>`)
-    .join("");
-  metricsPanel.classList.remove("hidden");
 }
 
-function renderReport(markdown) {
-  // The dossier quotes text from pages the agent fetched off live search results, so it is
-  // untrusted input. marked ships no sanitiser, and injected markup could change what the report
-  // appears to say while the JSON record stays clean, which is the one thing this project cannot
-  // let happen.
-  reportBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
-  reportPanel.classList.remove("hidden");
+function verdictTone(judgment) {
+  return { supported: "ok", refuted: "miss", partially_supported: "warn" }[judgment] || "off";
 }
 
-function reset() {
-  metricsPanel.classList.add("hidden");
-  reportPanel.classList.add("hidden");
-  showInfo("");
+function verdictCells(v) {
+  return [
+    ["Verdict", `<span class="pill ${verdictTone(v.judgment)}">${escapeHtml(words(v.judgment))}</span>`],
+    ["Confidence", `${percent(v.probability)} <span class="dim">${escapeHtml(v.band)}</span>`],
+    ["Steps", escapeHtml(v.steps_taken)],
+    ["Tool calls", escapeHtml(v.tool_calls)],
+    ["Tokens", escapeHtml(Number(v.tokens).toLocaleString())],
+    ["Sources", escapeHtml(v.source_diversity)],
+    ["Evidence", escapeHtml(v.evidence_count)],
+    ["Ended", v.halted ? "halted early" : "complete"],
+  ];
 }
 
 async function runInvestigation() {
-  if (polling) clearInterval(polling);
-  reset();
-  setBusy(true);
-  const seen = new Set();
-  setStatus("Starting a live investigation…");
+  caseView.clear();
+  caseBusy = true;
+  refreshButtons();
+  caseView.setStatus("Starting a live investigation…");
 
   let started;
   try {
@@ -274,85 +481,349 @@ async function runInvestigation() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `HTTP ${res.status}`);
+      throw new Error(typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`);
     }
     started = await res.json();
   } catch (err) {
-    setStatus(`Could not start: ${err.message}`, true);
-    setBusy(false);
+    caseView.setStatus(`Could not start: ${err.message}`, true);
+    caseBusy = false;
+    refreshButtons();
     loadHealth();
     return;
   }
 
-  let misses = 0;
-  polling = setInterval(async () => {
-    let job;
-    try {
-      const res = await fetch(`${API}/api/jobs/${started.job_id}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      job = await res.json();
-      misses = 0;
-    } catch (err) {
-      // One failed tick is nothing: the next one retries an idempotent read. A run of them means
-      // the backend is gone (it restarts on idle, and long jobs can age out of its memory), and
-      // leaving the page on a frozen phase with the controls disabled would strand the user.
-      if (++misses < 5) return;
-      clearInterval(polling);
-      polling = null;
-      setBusy(false);
-      railEl.classList.add("hidden");
-      setStatus(`Lost contact with the backend (${err.message}). Reload to start again.`, true);
-      return;
-    }
-    if (job.state === "running") {
-      if (job.phase && PHASES.includes(job.phase)) seen.add(job.phase);
-      drawRail(job.phase, seen);
-      setStatus(
-        `Running ${job.phase.replace("_", " ")} · ${job.calls_made} model call${job.calls_made === 1 ? "" : "s"} · ${Math.round(job.elapsed_seconds)}s elapsed`
-      );
-      return;
-    }
-    clearInterval(polling);
-    polling = null;
-    setBusy(false);
-    railEl.classList.add("hidden");
-    if (job.state === "failed") {
-      setStatus(`Investigation failed: ${job.error}`, true);
-      loadHealth();
-      return;
-    }
-    renderMetrics(job.outcome);
-    renderReport(job.markdown);
-    setStatus(`Finished in ${Math.round(job.elapsed_seconds)}s using ${job.calls_made} model calls.`);
+  const seen = new Set();
+  const settle = () => {
+    caseBusy = false;
+    caseView.hideRail();
     loadHealth();
-  }, 2500);
+  };
+  watchJob(started.job_id, {
+    running(job) {
+      if (CASE_PHASES.includes(job.phase)) seen.add(job.phase);
+      caseView.drawRail(CASE_PHASES, job.phase, seen);
+      caseView.setStatus(progressText(job));
+    },
+    finished(job) {
+      settle();
+      caseView.showMetrics(outcomeCells(job.outcome));
+      caseView.showReport(job.markdown);
+      caseView.setStatus(`Finished in ${Math.round(job.elapsed_seconds)}s using ${job.calls_made} model calls.`);
+    },
+    failed(job) {
+      settle();
+      caseView.setStatus(`Investigation failed: ${job.error}`, true);
+    },
+    lost() {
+      settle();
+      caseView.setStatus("The backend restarted and forgot this investigation. Start it again.", true);
+    },
+    stalled(err) {
+      settle();
+      caseView.setStatus(`Lost contact with the backend (${err.message}). Reload to start again.`, true);
+    },
+  });
 }
 
 async function runAblation() {
-  if (polling) clearInterval(polling);
-  reset();
-  setBusy(true);
-  railEl.classList.add("hidden");
-  setStatus("Running all 14 cases across all 3 memory modes, replayed from a recorded cassette…");
+  caseView.clear();
+  caseBusy = true;
+  refreshButtons();
+  caseView.setStatus("Running all 14 cases across all 3 memory modes, replayed from a recorded cassette…");
   try {
-    const data = await (await fetch(`${API}/api/ablation`)).json();
-    renderReport(data.markdown);
-    setStatus("Ablation complete.");
-    showInfo(
+    const res = await fetch(`${API}/api/ablation`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    caseView.showReport(data.markdown);
+    caseView.setStatus("Ablation complete.");
+    caseView.showInfo(
       "This comparison is always replayed from a recorded cassette, on purpose, not a limitation: " +
       "comparing memory modes is only valid when every arm sees byte-identical retrieval, so a live " +
       "run would measure the web changing between arms rather than memory. The recorded pages are " +
       "real, the same ones the CLI's own published numbers are audited against."
     );
   } catch (err) {
-    setStatus(`Ablation failed: ${err.message}`, true);
+    caseView.setStatus(`Ablation failed: ${err.message}`, true);
   } finally {
-    setBusy(false);
+    caseBusy = false;
+    refreshButtons();
   }
 }
 
+function describeChosenFile() {
+  const file = fileInput.files[0];
+  fileName.textContent = file ? file.name : "Choose a document";
+  fileHint.textContent = file
+    ? `${formatBytes(file.size)} · ready to check`
+    : "PDF, Word (.docx), HTML, Markdown or plain text, up to 5 MB. Or drop it here.";
+  refreshButtons();
+}
+
+async function checkDocument() {
+  const file = fileInput.files[0];
+  if (!file) return;
+  uploadView.clear();
+  if (file.size > MAX_UPLOAD_BYTES) {
+    uploadView.setStatus(`${file.name} is ${formatBytes(file.size)}, over the 5 MB limit.`, true);
+    return;
+  }
+  uploadBusy = true;
+  refreshButtons();
+  uploadView.setStatus(`Uploading ${file.name}…`);
+
+  let started;
+  try {
+    const res = await fetch(`${API}/api/documents?filename=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: file,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`);
+    }
+    started = await res.json();
+  } catch (err) {
+    uploadView.setStatus(`Could not check ${file.name}: ${err.message}`, true);
+    uploadBusy = false;
+    refreshButtons();
+    loadHealth();
+    return;
+  }
+
+  const stored = library.add({
+    id: started.job_id,
+    filename: file.name,
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+    state: "running",
+    phase: "starting",
+    claim: "",
+    reason: "",
+    verdict: null,
+    markdown: "",
+    error: "",
+  });
+  if (!stored) {
+    uploadView.showInfo("This browser would not store the result, so it will not be listed under My documents. The check still runs.");
+  }
+  fileInput.value = "";
+  describeChosenFile();
+  uploadFollowing = started.job_id;
+  uploadView.setStatus("Uploaded. Reading the document…");
+  renderLibrary();
+  followDocument(started.job_id, true);
+}
+
+function claimFields(claim) {
+  return claim ? { claim: claim.proposition || "", reason: claim.reason || "" } : {};
+}
+
+function viewsShowing(id, startedHere) {
+  const views = [];
+  if (startedHere && uploadFollowing === id) views.push(uploadView);
+  if (libraryViewing === id) views.push(libraryView);
+  return views;
+}
+
+function followDocument(id, startedHere) {
+  if (watching.has(id)) return;
+  const seen = new Set();
+  const settle = () => {
+    if (startedHere) {
+      uploadBusy = false;
+      refreshButtons();
+    }
+    renderLibrary();
+    for (const view of viewsShowing(id, startedHere)) showEntry(view, id);
+    loadHealth();
+  };
+  watchJob(id, {
+    running(job) {
+      const entry = library.update(id, { phase: job.phase, ...claimFields(job.claim) });
+      renderLibrary();
+      if (DOCUMENT_PHASES.includes(job.phase)) seen.add(job.phase);
+      for (const view of viewsShowing(id, startedHere)) {
+        view.drawRail(DOCUMENT_PHASES, job.phase, seen);
+        view.setStatus(progressText(job));
+        if (entry && entry.claim) view.showInfo(`Checking this claim: ${entry.claim}`);
+      }
+    },
+    finished(job) {
+      library.update(id, {
+        state: job.verdict ? "done" : "unchecked",
+        phase: "",
+        ...claimFields(job.claim),
+        verdict: job.verdict || null,
+        markdown: job.markdown || "",
+      });
+      settle();
+    },
+    failed(job) {
+      library.update(id, { state: "failed", phase: "", error: job.error || "unknown error" });
+      settle();
+    },
+    lost() {
+      library.update(id, { state: "lost", phase: "" });
+      settle();
+    },
+    stalled(err) {
+      for (const view of viewsShowing(id, startedHere)) {
+        view.hideRail();
+        view.setStatus(`Lost contact with the backend (${err.message}). Reload the page to pick this check up again.`, true);
+      }
+      if (startedHere) {
+        uploadBusy = false;
+        refreshButtons();
+      }
+    },
+  });
+}
+
+function showEntry(view, id) {
+  const entry = library.get(id);
+  view.clear();
+  if (!entry) return;
+  const name = entry.filename;
+  if (entry.claim) view.showInfo(`${entry.state === "done" ? "Claim checked" : "Claim read"}: ${entry.claim}`);
+  switch (entry.state) {
+    case "running":
+      view.setStatus(`${name} is still being checked${entry.phase && entry.phase !== "starting" ? `, currently ${words(entry.phase)}` : ""}. This updates as it goes.`);
+      return;
+    case "failed":
+      view.setStatus(`Checking ${name} failed: ${entry.error}`, true);
+      return;
+    case "lost":
+      view.setStatus(`The backend restarted before ${name} finished, so this check was lost. Upload the document again to re-run it.`, true);
+      return;
+    case "unchecked":
+      view.setStatus(`${name} was read, but it makes no factual claim that could be checked.`);
+      if (entry.markdown) view.showReport(entry.markdown);
+      return;
+    default:
+      view.setStatus(`Checked ${name}.`);
+      if (entry.verdict) view.showMetrics(verdictCells(entry.verdict));
+      if (entry.markdown) view.showReport(entry.markdown);
+  }
+}
+
+function statusPill(entry) {
+  switch (entry.state) {
+    case "running":
+      return `<span class="pill run">checking${entry.phase && entry.phase !== "starting" ? ` · ${escapeHtml(words(entry.phase))}` : "…"}</span>`;
+    case "done":
+      return entry.verdict
+        ? `<span class="pill ${verdictTone(entry.verdict.judgment)}">${escapeHtml(words(entry.verdict.judgment))} · ${percent(entry.verdict.probability)}</span>`
+        : '<span class="pill off">checked</span>';
+    case "unchecked":
+      return '<span class="pill off">nothing to check</span>';
+    case "failed":
+      return '<span class="pill miss">failed</span>';
+    default:
+      return '<span class="pill off">lost</span>';
+  }
+}
+
+function renderLibrary() {
+  const entries = library.entries();
+  libraryCount.textContent = entries.length ? `(${entries.length})` : "";
+  libraryEmpty.classList.toggle("hidden", entries.length > 0);
+  libraryList.innerHTML = entries
+    .slice()
+    .reverse()
+    .map((entry) => {
+      const id = escapeHtml(entry.id);
+      const detail =
+        entry.state === "failed" ? `<p class="doc-line err">${escapeHtml(entry.error)}</p>`
+        : entry.state === "unchecked" && entry.reason ? `<p class="doc-line dim">${escapeHtml(entry.reason)}</p>`
+        : "";
+      return `<li class="doc ${libraryViewing === entry.id ? "selected" : ""}">
+        <div class="doc-head"><span class="doc-name">${escapeHtml(entry.filename)}</span>${statusPill(entry)}</div>
+        ${entry.claim ? `<p class="doc-line">${escapeHtml(entry.claim)}</p>` : ""}
+        ${detail}
+        <div class="doc-foot">
+          <span>${escapeHtml(new Date(entry.uploadedAt).toLocaleString())} · ${escapeHtml(formatBytes(Number(entry.size) || 0))}</span>
+          <span class="doc-actions">
+            <button class="ghost small" data-action="view" data-id="${id}">View</button>
+            <button class="ghost small" data-action="remove" data-id="${id}">Remove</button>
+          </span>
+        </div>
+      </li>`;
+    })
+    .join("");
+}
+
+const tabs = {
+  cases: { button: $("tab-cases"), panel: $("panel-cases") },
+  upload: { button: $("tab-upload"), panel: $("panel-upload") },
+  library: { button: $("tab-library"), panel: $("panel-library") },
+};
+
+function selectTab(name) {
+  if (!tabs[name]) return;
+  for (const [key, tab] of Object.entries(tabs)) {
+    const on = key === name;
+    tab.button.classList.toggle("active", on);
+    tab.button.setAttribute("aria-selected", String(on));
+    tab.panel.classList.toggle("hidden", !on);
+  }
+  try {
+    sessionStorage.setItem(TAB_KEY, name);
+  } catch (err) {
+    // A remembered tab is a convenience; without storage the page simply opens on the first one.
+  }
+  if (name === "library") renderLibrary();
+}
+
+for (const [name, tab] of Object.entries(tabs)) tab.button.addEventListener("click", () => selectTab(name));
+
+libraryList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = button.dataset.id;
+  if (button.dataset.action === "view") {
+    libraryViewing = id;
+    renderLibrary();
+    showEntry(libraryView, id);
+    libraryView.status.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } else if (button.dataset.action === "remove") {
+    library.remove(id);
+    if (libraryViewing === id) {
+      libraryViewing = null;
+      libraryView.clear();
+    }
+    renderLibrary();
+  }
+});
+
+fileInput.addEventListener("change", describeChosenFile);
+dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  dropZone.classList.add("over");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
+dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dropZone.classList.remove("over");
+  if (event.dataTransfer && event.dataTransfer.files.length) {
+    fileInput.files = event.dataTransfer.files;
+    describeChosenFile();
+  }
+});
+
 runBtn.addEventListener("click", runInvestigation);
 ablateBtn.addEventListener("click", runAblation);
+checkBtn.addEventListener("click", checkDocument);
+
+renderLibrary();
+for (const entry of library.entries()) {
+  if (entry.state === "running") followDocument(entry.id, false);
+}
+try {
+  selectTab(sessionStorage.getItem(TAB_KEY) || "cases");
+} catch (err) {
+  selectTab("cases");
+}
 loadCases();
 </script>
 </body>

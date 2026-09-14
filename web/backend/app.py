@@ -12,6 +12,14 @@ page polls while it works. And the one exception on this whole surface, the memo
 deliberately never live at all: comparing memory modes is only valid when every arm sees
 byte-identical retrieval, so it always replays the same recorded cassette the CLI itself is audited
 against, which is a controlled measurement, not a dummy stand-in for the real thing.
+
+A visitor can also upload a document to have it checked. Its text is read on arrival, the live model
+picks out the one factual claim in it worth checking, and that claim is investigated exactly like a
+benchmark claim: against sources found independently, never against the document itself, because a
+document cannot corroborate itself. There is no expected answer to score an upload against, so its
+result is a verdict and a dossier rather than a `CaseOutcome`. The list of a visitor's documents
+lives in their browser rather than here, because this free instance forgets everything it holds
+whenever it goes to sleep.
 """
 
 import logging
@@ -21,17 +29,21 @@ import tempfile
 import threading
 import time
 import uuid
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, model_validator
 
+from documents import DocumentClaim, Intake, SubmittedDocument, UnreadableDocumentError, Verdict
 from osint_harness.__main__ import Harness, Workspace
 from osint_harness.bench.case import BenchmarkCase
 from osint_harness.bench.outcome import CaseOutcome
@@ -54,6 +66,13 @@ class JobState(StrEnum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+
+
+class JobKind(StrEnum):
+    """What a background job is investigating."""
+
+    CASE = "case"
+    DOCUMENT = "document"
 
 
 class LiveAllowance:
@@ -129,8 +148,8 @@ class CaseSummary(BaseModel):
         )
 
 
-class JobView(BaseModel):
-    """One job as a polling browser sees it, whether it is still running or finished."""
+class JobProgress(BaseModel):
+    """How far one background job has got, as a polling browser sees it."""
 
     id: str
     state: JobState
@@ -138,12 +157,24 @@ class JobView(BaseModel):
     calls_made: int
     elapsed_seconds: float
     error: str = ""
-    outcome: CaseOutcome | None = None
     record: Investigation | None = None
     markdown: str = ""
 
     @model_validator(mode="after")
-    def _payload_matches_state(self) -> "JobView":
+    def _a_failure_says_what_went_wrong(self) -> "JobProgress":
+        if self.state is JobState.FAILED and not self.error:
+            raise ValueError("a failed job must say what went wrong")
+        return self
+
+
+class CaseJobView(JobProgress):
+    """A benchmark case under investigation, scored against its expected answer once finished."""
+
+    kind: Literal[JobKind.CASE] = JobKind.CASE
+    outcome: CaseOutcome | None = None
+
+    @model_validator(mode="after")
+    def _payload_matches_state(self) -> "CaseJobView":
         """A finished job carries its result, and an unfinished one cannot pretend to.
 
         `state` and these nullable fields would otherwise encode the same fact twice, leaving
@@ -156,9 +187,41 @@ class JobView(BaseModel):
             raise ValueError("a finished job must carry its outcome and record")
         if not finished and (self.outcome is not None or self.record is not None):
             raise ValueError("only a finished job may carry an outcome or record")
-        if self.state is JobState.FAILED and not self.error:
-            raise ValueError("a failed job must say what went wrong")
         return self
+
+
+class DocumentJobView(JobProgress):
+    """An uploaded document being checked: the claim read from it, then the verdict on it."""
+
+    kind: Literal[JobKind.DOCUMENT] = JobKind.DOCUMENT
+    document: SubmittedDocument
+    claim: DocumentClaim | None = None
+    verdict: Verdict | None = None
+
+    @model_validator(mode="after")
+    def _payload_matches_state(self) -> "DocumentJobView":
+        """A finished check says what claim it read, and carries a verdict exactly when that claim
+        could be checked.
+
+        A document with nothing checkable in it finishes too, with no verdict and no record,
+        because declining to check an opinion column is a result rather than a failure. Anything
+        short of finished carries neither, whether or not its claim has been read yet.
+        """
+        concluded = self.verdict is not None or self.record is not None
+        if self.state is not JobState.DONE:
+            if concluded:
+                raise ValueError("only a finished check may carry a verdict or record")
+            return self
+        if self.claim is None:
+            raise ValueError("a finished check must say what claim it read")
+        if self.claim.is_checkable() and (self.verdict is None or self.record is None):
+            raise ValueError("a finished check of a checkable claim must carry its verdict")
+        if not self.claim.is_checkable() and concluded:
+            raise ValueError("a check with nothing to check cannot carry a verdict")
+        return self
+
+
+JobView = Annotated[CaseJobView | DocumentJobView, Field(discriminator="kind")]
 
 
 class Started(BaseModel):
@@ -196,8 +259,8 @@ class Health(BaseModel):
     model: str
 
 
-class Job:
-    """One investigation running in the background, readable while it is still running.
+class Job(ABC):
+    """One piece of live work running in the background, readable while it is still running.
 
     The phase it reports comes from the purpose of each model call, which is why a wrapper around
     the model client is what updates it: that is the one place every phase already passes through,
@@ -212,7 +275,6 @@ class Job:
         self._calls = 0
         self._started = time.monotonic()
         self._error = ""
-        self._outcome: CaseOutcome | None = None
         self._record: Investigation | None = None
         self._markdown = ""
 
@@ -226,32 +288,96 @@ class Job:
             self._phase = purpose
             self._calls += 1
 
-    def succeeded(self, outcome: CaseOutcome, record: Investigation, markdown: str) -> None:
-        """Record the finished investigation."""
-        with self._lock:
-            self._state = JobState.DONE
-            self._phase = "complete"
-            self._outcome = outcome
-            self._record = record
-            self._markdown = markdown
-
     def failed(self, error: str) -> None:
-        """Record that the investigation could not be produced at all."""
+        """Record that the work could not be produced at all."""
         with self._lock:
             self._state = JobState.FAILED
             self._error = error
 
-    def view(self) -> JobView:
+    def _finish(self, record: Investigation | None, markdown: str) -> None:
+        """Mark the job done with what it produced. The caller already holds the lock."""
+        self._state = JobState.DONE
+        self._phase = "complete"
+        self._record = record
+        self._markdown = markdown
+
+    def _elapsed_seconds(self) -> float:
+        return round(time.monotonic() - self._started, 1)
+
+    @abstractmethod
+    def view(self) -> CaseJobView | DocumentJobView:
         """A consistent snapshot, taken under the lock so a poll never reads a half-written job."""
+
+
+class CaseJob(Job):
+    """A benchmark case being investigated in the background."""
+
+    def __init__(self, job_id: str) -> None:
+        super().__init__(job_id)
+        self._outcome: CaseOutcome | None = None
+
+    def succeeded(self, outcome: CaseOutcome, record: Investigation, markdown: str) -> None:
+        """Record the finished investigation."""
         with self._lock:
-            return JobView(
+            self._outcome = outcome
+            self._finish(record, markdown)
+
+    def view(self) -> CaseJobView:
+        with self._lock:
+            return CaseJobView(
                 id=self._id,
                 state=self._state,
                 phase=self._phase,
                 calls_made=self._calls,
-                elapsed_seconds=round(time.monotonic() - self._started, 1),
+                elapsed_seconds=self._elapsed_seconds(),
                 error=self._error,
                 outcome=self._outcome,
+                record=self._record,
+                markdown=self._markdown,
+            )
+
+
+class DocumentJob(Job):
+    """An uploaded document being checked in the background."""
+
+    def __init__(self, job_id: str, document: SubmittedDocument) -> None:
+        super().__init__(job_id)
+        self._document = document
+        self._claim: DocumentClaim | None = None
+        self._verdict: Verdict | None = None
+
+    def document(self) -> SubmittedDocument:
+        """The document this job is checking."""
+        return self._document
+
+    def read(self, claim: DocumentClaim) -> None:
+        """Record the claim the intake found, while the check of it is still to come."""
+        with self._lock:
+            self._claim = claim
+
+    def checked(self, verdict: Verdict, record: Investigation, markdown: str) -> None:
+        """Record the finished check of the claim."""
+        with self._lock:
+            self._verdict = verdict
+            self._finish(record, markdown)
+
+    def found_nothing_to_check(self, markdown: str) -> None:
+        """Record that the document holds no claim worth investigating."""
+        with self._lock:
+            self._finish(None, markdown)
+
+    def view(self) -> DocumentJobView:
+        with self._lock:
+            return DocumentJobView(
+                id=self._id,
+                state=self._state,
+                phase=self._phase,
+                calls_made=self._calls,
+                elapsed_seconds=self._elapsed_seconds(),
+                error=self._error,
+                document=self._document,
+                claim=self._claim,
+                verdict=self._verdict,
                 record=self._record,
                 markdown=self._markdown,
             )
@@ -339,25 +465,28 @@ class HostedDemo:
         if request.case_id not in benchmark.identifiers():
             raise HTTPException(status_code=404, detail=f"no such case: {request.case_id}")
         case = benchmark.case(request.case_id)
+        self._refuse_unless_live(visitor)
 
-        if not self.live_is_configured():
-            raise HTTPException(
-                status_code=503, detail="no API key is configured on this instance"
-            )
-        if self._allowance.remaining() <= 0:
-            raise HTTPException(
-                status_code=503,
-                detail="today's shared allowance of live calls is spent; it resets at midnight UTC",
-            )
-        if self._allowance.remaining_for(visitor) <= 0:
-            raise HTTPException(
-                status_code=503,
-                detail="you have used your share of today's live calls; it resets at midnight UTC",
-            )
-
-        job = Job(job_id=uuid.uuid4().hex[:12])
+        job = CaseJob(job_id=uuid.uuid4().hex[:12])
         self._remember(job)
         self._runner.submit(self._carry_out, job, case, request.memory, visitor)
+        return Started(job_id=job.identifier())
+
+    def check_document(self, filename: str, content: bytes, visitor: str) -> Started:
+        """Queue a live check of an uploaded document's main claim.
+
+        A file that cannot be read is refused first, whether or not live calls are available, so a
+        visitor learns their upload was the problem rather than the demo's allowance.
+        """
+        try:
+            document = SubmittedDocument.read(filename, content)
+        except UnreadableDocumentError as failure:
+            raise HTTPException(status_code=422, detail=str(failure)) from failure
+        self._refuse_unless_live(visitor)
+
+        job = DocumentJob(job_id=uuid.uuid4().hex[:12], document=document)
+        self._remember(job)
+        self._runner.submit(self._check, job, visitor)
         return Started(job_id=job.identifier())
 
     def job(self, job_id: str) -> Job:
@@ -392,6 +521,23 @@ class HostedDemo:
         runs = [harness.sweep(cases, mode, Budget()) for mode in MemoryMode]
         return AblationResponse(markdown=Ablation(runs=tuple(runs)).as_markdown())
 
+    def _refuse_unless_live(self, visitor: str) -> None:
+        """Refuse, before any job exists, work this demo cannot carry out live right now."""
+        if not self.live_is_configured():
+            raise HTTPException(
+                status_code=503, detail="no API key is configured on this instance"
+            )
+        if self._allowance.remaining() <= 0:
+            raise HTTPException(
+                status_code=503,
+                detail="today's shared allowance of live calls is spent; it resets at midnight UTC",
+            )
+        if self._allowance.remaining_for(visitor) <= 0:
+            raise HTTPException(
+                status_code=503,
+                detail="you have used your share of today's live calls; it resets at midnight UTC",
+            )
+
     def _investigator(
         self, model: ModelClient, cassette: Cassette, memory: MemoryMode
     ) -> Investigator:
@@ -406,7 +552,7 @@ class HostedDemo:
         )
 
     def _carry_out(
-        self, job: Job, case: BenchmarkCase, memory: MemoryMode, visitor: str
+        self, job: CaseJob, case: BenchmarkCase, memory: MemoryMode, visitor: str
     ) -> None:
         """Run one live investigation to completion, recording whatever it produced.
 
@@ -434,6 +580,52 @@ class HostedDemo:
             )
         except Exception as failure:
             logging.exception("investigation %s failed", job.identifier())
+            job.failed(f"{type(failure).__name__}: {failure}")
+
+    def _check(self, job: DocumentJob, visitor: str) -> None:
+        """Read the one claim out of an uploaded document, then investigate it live.
+
+        The investigation runs with short memory and nothing recalled or kept: a visitor's
+        document is theirs, so its check neither draws on nor feeds the archive that benchmark
+        investigations share. The claim goes in as a subject like any benchmark claim, which is
+        what keeps the document itself out of the evidence.
+        """
+        try:
+            document = job.document()
+            model: ModelClient = HostedModel(
+                LiveModel(model=self._model_id), self._allowance, visitor, job
+            )
+            claim = Intake(model).claim_of(document)
+            job.read(claim)
+            subject = claim.subject(document)
+            if subject is None:
+                job.found_nothing_to_check(claim.refusal_report(document))
+                return
+            investigator = Investigator(
+                model=model,
+                encyclopedia=Encyclopedia(
+                    cassette := Cassette.load(
+                        self._workspace.cassette_path(), CassetteMode.RECORD
+                    )
+                ),
+                pages=PageFetch(cassette),
+                web_search=WebSearch(cassette),
+                archive=InvestigationArchive(),
+                register=SourceRegister(),
+            )
+            investigation = investigator.investigate(
+                run_id=f"document-{job.identifier()}",
+                subject=subject,
+                memory_mode=MemoryMode.SHORT,
+                budget=Budget(max_steps=self.LIVE_STEP_CEILING),
+            )
+            job.checked(
+                verdict=Verdict.of(investigation),
+                record=investigation,
+                markdown=Dossier(investigation).as_markdown(),
+            )
+        except Exception as failure:
+            logging.exception("document check %s failed", job.identifier())
             job.failed(f"{type(failure).__name__}: {failure}")
 
     def _remember(self, job: Job) -> None:
@@ -470,6 +662,19 @@ def _visitor_of(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+async def _upload_of(request: Request) -> bytes:
+    """The raw request body, refused the moment it passes the size limit rather than once read."""
+    received = bytearray()
+    async for chunk in request.stream():
+        received.extend(chunk)
+        if len(received) > SubmittedDocument.MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"documents are limited to {SubmittedDocument.MAX_BYTES:,} bytes",
+            )
+    return bytes(received)
+
+
 DEMO = HostedDemo(
     workspace=_workspace(),
     allowance=LiveAllowance(
@@ -482,7 +687,7 @@ DEMO = HostedDemo(
 app = FastAPI(
     title="Agentic OSINT Harness",
     description="An autonomous OSINT investigator, its benchmark, and its memory ablation.",
-    version="1.0.0",
+    version="1.1.0",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -517,9 +722,24 @@ def investigate(request: InvestigateRequest, http_request: Request) -> Started:
     return DEMO.start(request, _visitor_of(http_request))
 
 
+@app.post("/api/documents")
+async def check_document(
+    http_request: Request, filename: Annotated[str, Query(min_length=1, max_length=255)]
+) -> Started:
+    """Check the main claim in one document, sent as the raw request body, and hand back a handle.
+
+    Reading a PDF is real work, so it runs off the event loop: polls from every other visitor keep
+    being answered while one upload is parsed.
+    """
+    content = await _upload_of(http_request)
+    return await run_in_threadpool(
+        DEMO.check_document, filename, content, _visitor_of(http_request)
+    )
+
+
 @app.get("/api/jobs/{job_id}")
 def job(job_id: str) -> JobView:
-    """How one investigation is getting on, and its dossier once it finishes."""
+    """How one investigation or document check is getting on, and its dossier once it finishes."""
     return DEMO.job(job_id).view()
 
 
