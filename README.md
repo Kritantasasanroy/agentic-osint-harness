@@ -2,18 +2,8 @@
 
 Here's what I built: an investigator that takes a company, a person, or a claim someone made, and
 actually goes and checks it. It searches, reads real sources, weighs what it finds against competing
-explanations, and hands back a report with citations and a confidence number that means something.
-A benchmark and an instrumented harness sit alongside it, because I wanted proof this works, not a
-demo that only looks good once.
+explanations, and hands back a report with citations and a confidence number 
 
-The agent itself is an explicit state machine. Nothing hides inside a black box. Every transition
-gets recorded, and every number in this document gets recomputed from those records instead of typed
-in from memory. If I can't point at the log a number came from, it doesn't go in here.
-
-This document covers three things a reviewer of this submission will want to find fast: the
-**architecture** (a diagram you can actually read, not a paragraph pretending to be one), the
-**metrics** that got measured and why, and a **report** on the design choices, what actually got
-found running this thing for real, and what's still left undone.
 
 ---
 
@@ -35,10 +25,7 @@ pytest && mypy && ruff check .                       # 306 tests, strict types, 
 Reports land in `runs/<case>-<memory>/findings.md`, and the ablation report in
 `runs/results/ablation.md`.
 
-One thing to be upfront about: what you're running offline is the machinery, not the analysis.
-Without an API key, the harness falls back to a rehearsed analyst. Real retrieval, real citations,
-but no reasoning, so it abstains on every case. I did that on purpose, and the [Metrics](#metrics)
-section below says why. Want the real thing instead?
+
 
 ```bash
 export NVIDIA_API_KEY=...       # preferred: same model, direct, far higher throughput
@@ -48,7 +35,7 @@ osint-harness --live --record ablate
 
 ---
 
-## Or just watch it run, live, no setup at all
+## live Demo
 
 I put a hosted version up too: [frontend](https://agentic-osint-harness-kritantasasanroys-projects.vercel.app),
 backed by a [FastAPI service](https://osint-harness-api.onrender.com/docs) running the actual
