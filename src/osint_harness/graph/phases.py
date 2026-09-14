@@ -76,18 +76,20 @@ class Phase(Node):
 class Direction(Phase):
     """Opens the investigation: the questions to answer, and the competing explanations."""
 
-    MINIMUM_HYPOTHESES = 2
+    MAX_ADDED_HYPOTHESES = 2
 
     def conduct(self, investigation: Investigation) -> Transition:
         subject = investigation.subject
         prompt = (
             f"{Briefing(investigation).header()}\n\n"
-            "Open this investigation. Propose the lines of enquiry worth pursuing, and at least "
-            "two competing hypotheses that could each turn out to be the true one.\n\n"
+            "Open this investigation. Propose the lines of enquiry worth pursuing.\n\n"
             "Suggested starting questions:\n"
             + "\n".join(f"- {question}" for question in subject.seed_leads())
-            + "\n\nCandidate hypotheses:\n"
+            + "\n\nThese competing hypotheses are already on record, and every one of them will "
+            "be tested:\n"
             + "\n".join(f"- {statement}" for statement in subject.opening_hypotheses())
+            + "\n\nAdd a hypothesis only if it is a genuinely different answer to the proposition "
+            "under test that the ones above do not already cover."
         )
         plan = self._model.decide("direction", self.analyst_brief(), prompt, DirectionPlan)
 
@@ -99,11 +101,7 @@ class Direction(Phase):
             for question in subject.seed_leads():
                 investigation.leads.append(Lead(question=question, origin="direction"))
 
-        offered = plan.hypotheses
-        statements = (
-            offered if len(offered) >= self.MINIMUM_HYPOTHESES else subject.opening_hypotheses()
-        )
-        for statement in statements:
+        for statement in self._hypotheses(subject.opening_hypotheses(), plan.hypotheses):
             investigation.hypotheses.append(Hypothesis(statement=statement))
 
         return Transition(
@@ -113,6 +111,30 @@ class Direction(Phase):
                 f"{len(investigation.leads)} leads"
             ),
         )
+
+    def _hypotheses(
+        self, opening: tuple[str, ...], offered: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        """The subject's own competing hypotheses, always, plus at most two the analyst adds.
+
+        The subject's set is written to cover every verdict an investigation can reach, down to a
+        false premise, so it is not something the analyst gets to replace. It used to be: whenever
+        the model offered two or more hypotheses of its own they were used instead, and a live run
+        showed a claim's whole set silently swapped for the model's four. An offered hypothesis
+        that only restates one already held is not added a second time.
+        """
+        held = {self._normalised(statement) for statement in opening}
+        added: list[str] = []
+        for statement in offered:
+            key = self._normalised(statement)
+            if key and key not in held and len(added) < self.MAX_ADDED_HYPOTHESES:
+                held.add(key)
+                added.append(statement)
+        return (*opening, *added)
+
+    @classmethod
+    def _normalised(cls, statement: str) -> str:
+        return " ".join(statement.lower().split()).rstrip(".")
 
 
 class Collection(Phase):
@@ -304,12 +326,23 @@ class Reconciliation(Phase):
             f"{briefing.header()}\n\n{briefing.hypotheses()}\n\n{briefing.evidence()}\n\n"
             "For each piece of evidence, say whether it is consistent with, inconsistent with, or "
             "not applicable to each hypothesis, referring to hypotheses by their number and "
-            "evidence by its identifier. Then give your judgment and the probability that your "
-            "judgment is correct."
+            "evidence by its identifier. Then judge the proposition under test by the verdict "
+            "standard above, and give the probability that your judgment is correct. The "
+            "judgment is a verdict on that proposition, not a report of which hypothesis the "
+            "evidence favours."
         )
         result = self._model.decide(
             "reconciliation", self.analyst_brief(), prompt, ReconciliationResult
         )
+
+        if self._carries_no_assessment(result):
+            return Transition(
+                next_phase=InvestigationPhase.REFLECTION,
+                reason=(
+                    "gave no reasoning for its judgment; the standing assessment and ACH matrix "
+                    "stand"
+                ),
+            )
 
         applied = 0
         for call in result.calls:
@@ -338,6 +371,24 @@ class Reconciliation(Phase):
             reason=f"scored {applied} evidence-hypothesis pairs; judgment {judgment.value}",
         )
 
+    @classmethod
+    def _carries_no_assessment(cls, result: ReconciliationResult) -> bool:
+        """Whether this reply carries no real conclusion, regardless of how many calls it made.
+
+        The domain model defines an assessment as a judgment, a confidence, and the reasoning for
+        both; a reply with no rationale supplies the first two without the third, the same "bare
+        grade with nothing behind it" the standing brief already refuses for a source's reliability
+        grade. Two live sweeps found this both ways. Once with an entirely empty reply: every field
+        has a default, so an empty object validates, and it overwrote a correct `supported` at 0.92
+        with the defaults' `insufficient_evidence` at 0.5. Once with real calls attached: a second
+        round re-scored 30 evidence-hypothesis pairs and reversed a well-reasoned
+        `partially_supported` to `refuted`, with an empty rationale explaining neither the verdict
+        nor why every pair had just been judged the opposite way from the round before. Checked
+        before any call is applied, so an unreasoned round changes nothing at all, not the verdict
+        and not the matrix underneath it, rather than leaving the two contradicting each other.
+        """
+        return not result.rationale.strip()
+
     def _defensible(
         self, investigation: Investigation, result: ReconciliationResult, leading: str
     ) -> tuple[Judgment, float]:
@@ -361,7 +412,7 @@ class Reconciliation(Phase):
 class Reflection(Phase):
     """Criticises the investigation so far and decides whether concluding would be honest."""
 
-    RESERVE_STEPS = 2
+    STEPS_FOR_ANOTHER_ROUND_AND_REPORT = 5
 
     def conduct(self, investigation: Investigation) -> Transition:
         briefing = Briefing(investigation)
@@ -370,7 +421,10 @@ class Reflection(Phase):
             "Criticise this investigation before it concludes. What would a sceptical reviewer "
             "say is missing? Is any hypothesis being favoured on thin evidence? Is there an "
             "explanation nobody has stated yet? Only say you are ready to conclude if the "
-            "evidence genuinely carries the judgment."
+            "evidence genuinely carries the judgment.\n\n"
+            "A new hypothesis must be a different answer to the proposition under test. A detail "
+            "inside an answer already stated, such as how or why it came about, is a lead to "
+            "pursue, not a new hypothesis."
         )
         result = self._model.decide("reflection", self.analyst_brief(), prompt, ReflectionResult)
 
@@ -386,7 +440,7 @@ class Reflection(Phase):
         if self._running_out(investigation):
             return Transition(
                 next_phase=InvestigationPhase.DISSEMINATION,
-                reason="budget nearly spent; reporting on what is actually held",
+                reason="no budget left for another round; reporting on what is actually held",
             )
         if result.ready_to_conclude and not investigation.has_blocking_leads():
             return Transition(
@@ -402,8 +456,16 @@ class Reflection(Phase):
         )
 
     def _running_out(self, investigation: Investigation) -> bool:
-        """Whether there is only enough budget left to write the report."""
-        return len(investigation.steps) + self.RESERVE_STEPS >= investigation.budget.max_steps
+        """Whether sending the investigation back for more would leave no budget for the report.
+
+        Another round costs four steps, collection through this reflection again, and the report
+        one more, all counted after this reflection's own step. This used to hold back two steps,
+        which never covered a round: on three of the last four live runs a reflection sent the
+        investigation back, the round it started used up the budget, and the machine halted
+        without a report.
+        """
+        remaining = investigation.budget.max_steps - len(investigation.steps) - 1
+        return remaining < self.STEPS_FOR_ANOTHER_ROUND_AND_REPORT
 
 
 class Dissemination(Phase):

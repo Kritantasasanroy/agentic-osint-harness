@@ -338,3 +338,97 @@ class TestLiveModelDecide:
         model.decide("direction", "sys", "prompt", Decision)
 
         assert slept and slept[0] > 2.5
+
+
+class ScriptedProvider:
+    """A provider answering each request from a fixed script, so retries can be counted."""
+
+    def __init__(self, *replies: FakeChatResponse | httpx.TransportError) -> None:
+        self._replies = list(replies)
+        self.requests = 0
+
+    def post(self, *_args: object, **_kwargs: object) -> FakeChatResponse:
+        self.requests += 1
+        reply = self._replies.pop(0)
+        if isinstance(reply, httpx.TransportError):
+            raise reply
+        return reply
+
+
+class TestLiveModelRetries:
+    """A live sweep with a few investigations running at once drew "Service temporarily
+    overloaded" and 429 from NVIDIA within seconds, and every affected investigation halted on its
+    first unlucky call. A throttle or a server-side failure is now waited out a few times before it
+    counts, while a request the provider rejects on its merits still fails at once."""
+
+    def _answering(
+        self, monkeypatch: pytest.MonkeyPatch, provider: ScriptedProvider
+    ) -> tuple[LiveModel, list[float]]:
+        slept: list[float] = []
+        monkeypatch.setattr("time.sleep", slept.append)
+        model = LiveModel(api_key="sk-test")
+        monkeypatch.setattr(model._client, "post", provider.post)
+        return model, slept
+
+    def test_a_passing_overload_is_waited_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        provider = ScriptedProvider(
+            FakeChatResponse({"error": {"message": "Service temporarily overloaded"}}, 503),
+            FakeChatResponse({}, 429),
+            FakeChatResponse(Completion.of(json.dumps({"verdict": "go"}))),
+        )
+        model, slept = self._answering(monkeypatch, provider)
+
+        assert model.decide("collection", "sys", "prompt", Decision).verdict == "go"
+        assert provider.requests == 3
+        assert sum(slept) >= sum(LiveModel.RETRY_DELAYS_SECONDS[:2])
+
+    def test_a_request_rejected_on_its_merits_is_not_retried(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        provider = ScriptedProvider(FakeChatResponse({"error": {"message": "bad request"}}, 400))
+        model, _ = self._answering(monkeypatch, provider)
+
+        with pytest.raises(ModelUnavailableError, match="bad request"):
+            model.decide("collection", "sys", "prompt", Decision)
+        assert provider.requests == 1
+
+    def test_a_provider_that_stays_unreachable_halts_rather_than_crashes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Raised raw, a connection failure was an `httpx` error the investigator does not catch,
+        so it crashed the run where any model failure halts it."""
+        attempts = len(LiveModel.RETRY_DELAYS_SECONDS) + 1
+        provider = ScriptedProvider(*(httpx.ConnectError("unreachable") for _ in range(attempts)))
+        model, _ = self._answering(monkeypatch, provider)
+
+        with pytest.raises(ModelUnavailableError, match="could not reach"):
+            model.decide("collection", "sys", "prompt", Decision)
+        assert provider.requests == attempts
+
+    def test_a_malformed_reply_is_asked_for_again_before_it_counts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Found live: an investigation that had already reached its correct verdict halted one
+        step short of its report because a reflection came back as `{"{"": ""`."""
+        provider = ScriptedProvider(
+            FakeChatResponse(Completion.of('{"{"": ""')),
+            FakeChatResponse(Completion.of(json.dumps({"verdict": "go"}))),
+        )
+        model, _ = self._answering(monkeypatch, provider)
+
+        assert model.decide("reflection", "sys", "prompt", Decision).verdict == "go"
+        assert provider.requests == 2
+        assert model.spent() == Usage(input_tokens=240, output_tokens=80)
+
+    def test_a_reply_that_stays_malformed_still_halts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        attempts = LiveModel.MALFORMED_REPLY_RETRIES + 1
+        provider = ScriptedProvider(
+            *(FakeChatResponse(Completion.of(json.dumps({"wrong": 1}))) for _ in range(attempts))
+        )
+        model, _ = self._answering(monkeypatch, provider)
+
+        with pytest.raises(ModelUnavailableError, match="did not match Decision"):
+            model.decide("reflection", "sys", "prompt", Decision)
+        assert provider.requests == attempts

@@ -113,6 +113,9 @@ class TestDossier:
         assert "very likely" in rendered
         assert "0.82" in rendered
 
+    def test_states_the_proposition_the_verdict_is_a_verdict_on(self) -> None:
+        assert "**Proposition under test:** Acme Corp is a real entity" in self._rendered()
+
     def test_every_evidence_item_carries_a_grade_and_a_resolvable_citation(self) -> None:
         rendered = self._rendered()
 

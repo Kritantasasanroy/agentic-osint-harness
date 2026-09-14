@@ -24,7 +24,7 @@ pip install -e ".[dev]"
 osint-harness cases                                  # the 14 benchmark subjects and claims
 osint-harness investigate ada-lovelace-person        # one investigation, replayed offline
 osint-harness ablate                                 # all 14 cases x 3 memory modes, with a report
-pytest && mypy && ruff check .                       # 254 tests, strict types, clean lint
+pytest && mypy && ruff check .                       # 288 tests, strict types, clean lint
 ```
 
 Reports land in `runs/<case>-<memory>/findings.md`, and the ablation report in
@@ -59,6 +59,18 @@ request gets refused outright, with the reason stated plainly, never quietly sat
 way. A run takes a few minutes and about a dozen model calls, shared across whoever's visiting that
 day, so don't be surprised if it says the allowance is gone, that's the real free tier, not a demo
 limit I invented.
+
+There's a second way in, on the **Check a document** tab. Upload a PDF, a Word file, HTML, Markdown
+or plain text (up to 5 MB) and the agent reads it, picks out the one main factual claim it makes,
+restates that claim so it stands on its own, and then investigates it exactly the way it
+investigates a benchmark claim: against sources it finds on the live web. The document never gets
+to count as evidence for itself. It only decides what gets checked, and the investigation never
+sees it. If there's nothing checkable in it, an opinion column say, it tells you that instead of
+inventing a claim to check. Every document you check lands under **My documents** with its claim,
+verdict, confidence and full dossier. That list lives in your own browser rather than on the server,
+which keeps one visitor's uploads away from the next and survives the free backend going to sleep.
+There's no expected answer to score an upload against, so you get a verdict and a report there,
+never a right-or-wrong mark.
 
 One button on that page stays offline on purpose: the memory ablation, comparing `none`/`short`/`long`
 across all 14 cases. Making that live would actually make it worse, not more honest, since the whole
@@ -297,13 +309,106 @@ worse failure than an error, because nothing anywhere reports it. `WebSearch` no
 that is not parseable results as an explicit failure, so a blocked search can never again look like
 an honest empty one.
 
+### 12. A verdict needs to say what it's a verdict on, or the model will guess
+
+Once search actually worked, I could finally see the model reason over real, diverse evidence
+instead of one Wikipedia page, and that's what surfaced the next problem: the harness never told the
+model what `supported` or `refuted` actually *meant* for the subject in front of it. Every subject
+opened with a `SUBJECT (kind): descriptor` line and nothing else. On Theranos and Wirecard, both
+adverse-media cases, the model weighed the evidence correctly, ruled out "clean company" and led
+with "operates, but has adverse findings", then wrote `supported`, meaning that hypothesis was
+supported. The benchmark reads the same word as a verdict on the company being clean. Correct
+analysis, scored wrong, because nothing had ever said which reading applied.
+
+So every subject now carries a `proposition_under_test()`, the one sentence a verdict is actually a
+verdict on, and a `verdict_standard()` saying in plain terms what each of the four judgments asserts
+about that kind of subject. Both go into the prompt every phase sees, in every memory mode, for the
+same reason the opening hypotheses were never gated: they state the task, they don't accumulate
+findings, so hiding them wouldn't model a weaker memory, it would just remove the question.
+
+Writing that standard down took several tries before it actually worked, and each miss taught me
+something specific rather than something vague:
+
+- **Direction was quietly replacing the subject's own hypotheses.** Fewer than two offered fell back
+  to the subject's set, but two or more replaced it outright, so a model that offered its own four
+  could silently swap out the very hypotheses written to cover every verdict. Fixed: the subject's
+  hypotheses are always kept, and the model can only add up to two genuinely new ones on top,
+  de-duplicated against what's already there.
+- **A confident verdict with no reasoning behind it could still overwrite a correct one.** Every
+  field of the reconciliation reply has a default, so an empty object validates as a reply. Twice,
+  a reasoned earlier verdict got silently replaced: once by an entirely empty reply defaulting to
+  `insufficient_evidence`, once by a reply that rescored a real thirty-pair ACH matrix and reversed a
+  well-reasoned `partially_supported` to `refuted` with an empty rationale explaining neither the
+  reversal nor the verdict. An assessment is a judgment, a confidence, and the reasoning for both,
+  the same standard already enforced for a source's reliability grade; a reply with no rationale now
+  changes nothing, not the verdict and not the matrix underneath it.
+- **A compound claim needs its core event named, not just implied.** "Einstein was awarded the Nobel
+  Prize for his theory of relativity" is true about the prize and false about the reason. Three
+  rounds of live testing called it `refuted` anyway, because "the assertion is inaccurate as stated"
+  and "the assertion is partly accurate but misleading as stated" are both trivially true the moment
+  any part of a compound claim is wrong, so nothing separated a hypothesis about the reason being
+  wrong from a hypothesis about the whole thing being wrong. What worked was naming the mechanical
+  test directly in the standard: set aside the clause giving the reason, date, place, manner or
+  actor, and judge what's left. Three of three retests after that came back `partially_supported`,
+  where four straight attempts before it hadn't.
+- **A false premise needs to be its own hypothesis, explicitly, or "wholly false" absorbs it.** The
+  King of France case had been correct twice, then flipped to `refuted` once "did not happen or does
+  not hold at all" got sharper, because that phrasing reads just as naturally as "the premise itself
+  is unreal." Both the wholly-false and partly-true hypotheses now explicitly presuppose a real
+  premise, so a claim about something that doesn't exist routes to its own hypothesis instead of
+  getting swept into "wholly false."
+- **Finding a lot about someone doesn't mean you found the right someone.** With no qualifiers,
+  John Smith should be unresolvable, but a run that finally completed all ten steps (instead of
+  halting partway on a transient provider error, once the retry logic below existed to get it there)
+  retrieved a clean, abundant, internally consistent record for the historical Captain John Smith
+  and reported `supported`, reasoning that "all sources describe the same historical figure." The old
+  hypothesis asked whether the record *conflates* distinct people, a property of how well the
+  investigation goes; the real question is whether the query itself, name plus whatever qualifiers
+  were given, distinguishes one person from the others who share the name. An abundant record for one
+  candidate doesn't answer that. Reworded, and three of three retests landed correctly at
+  `insufficient_evidence`.
+
+None of this touches the offline path. `RehearsedModel` never writes a judgment or a hypothesis of
+its own, so the ablation numbers are unaffected; I reran it and the report is still byte-identical.
+
+### 13. Two more failures the same fixed-code sweeps needed catching
+
+A couple of things surfaced purely from finally running enough long, uninterrupted investigations
+back to back, unrelated to what each one is actually reasoning about:
+
+- **A transient provider error used to end the whole investigation.** With a few running at once,
+  NVIDIA's endpoint would occasionally answer "Service temporarily overloaded" or 429 within seconds
+  of a call starting, and the halt landed wherever the investigation happened to be, sometimes
+  minutes of real work lost to a condition that clears itself. `LiveModel` now waits out a throttle or
+  a server error a few times, each pause longer than the last, before it counts as a real failure; a
+  request rejected on its own merits still fails immediately, and a connection that never completes
+  at all now becomes the same kind of halt a bad reply always did, rather than an unhandled
+  transport error.
+- **Reflection held back too little budget to actually reach a report.** It reserved two steps before
+  sending an investigation back for more evidence, but a full round, collection through reflection
+  again, costs four, plus one more to write the report. Under a twelve-step ceiling, a third round
+  reliably ran the clock out one step short of Dissemination. Three of the four live investigations in
+  the previous round of testing halted with no report at all for exactly this reason. Fixed by
+  actually counting what a round and a report cost before agreeing to another one.
+- **A page fetch that hit a PDF, or a page carrying an unrecognised HTML marked section, could ruin
+  or crash the whole run.** One investigation's evidence included three PDFs read as if they were
+  HTML, hundreds of thousands of characters each, roughly half of them raw binary, all treated as
+  citable text. A later run crashed outright on a byte sequence starting `<![`, which Python's HTML
+  parser doesn't recognise. `PageFetch` now refuses anything that isn't declared as a text or HTML
+  page, as a failed lookup rather than bad evidence, and the parser escapes an unrecognised marked
+  section instead of raising on it.
+
 ---
 
 ## The benchmark
 
 14 cases: 5 companies, 4 people, 5 claims. I picked them to be adversarial, not just varied for
 variety's sake. Every judgment type and every trap gets exercised at least once, and a test fails the
-moment that stops being true.
+moment that stops being true. A second, 13-case set lives at
+[`benchmark/holdout.json`](benchmark/holdout.json), the same shape and the same traps on different
+subjects, and it never once informed a fix while I was tuning the prompts above. It exists to answer
+one question honestly: did fixing the 14 cases I could see teach the model something general, or just
+memorise those 14 answers.
 
 | Case | Trap | Why it's there |
 | --- | --- | --- |
@@ -320,8 +425,8 @@ moment that stops being true.
 
 ## Honest status: what's actually verified and what isn't
 
-**Verified, with commands you can run yourself:** 254 tests pass, `mypy --strict` comes back clean
-across 40 source files, `ruff check` is clean, and a full 42-episode ablation (14 cases times 3
+**Verified, with commands you can run yourself:** 288 tests pass, `mypy --strict` comes back clean
+across 43 source files, `ruff check` is clean, and a full 42-episode ablation (14 cases times 3
 memory modes) runs end to end offline and writes its report. Running `ablate` twice gives
 byte-identical output both times, which is the only reason the numbers below are worth quoting at
 all.
@@ -343,6 +448,12 @@ machinery, not the agent:
 The one column that's actually telling you something is the last one. `long` mode shows memory
 interference that `none` and `short` simply don't, on similarly named subjects, caught and attributed
 automatically. The instrumentation works even when the analyst behind it doesn't.
+
+That 21% is the machinery running with no reasoning behind it at all, and it stays true for exactly
+that reason: it's the floor, not the ceiling. What the live model itself actually reaches, once it's
+given a real reason to reason and the fixes below are all applied, is decision #12 and #13's story,
+ending in a 14-of-14 tuning sweep and a 12-of-13 sweep against 13 cases none of that tuning ever saw.
+Read on for how the story gets there.
 
 **The live path itself is verified now too, on a real case, against a real free model, not
 simulated.** I ran `--live --record` once on `ada-lovelace-person` and it completed five phases in
@@ -402,20 +513,118 @@ That is the system working as designed: a free 120B model reasoning imperfectly 
 the thing being measured, and the point of Brier scores and failure tags is that a wrong answer
 arrives labelled as one rather than quietly passing for a right one.
 
+### What actually turned the model half around
+
+Looking closely at that one-of-three result is what led to decision #12. Theranos wasn't a reasoning
+failure at all: the model correctly ruled out "clean company" and correctly led with "operates, but
+has adverse findings", then wrote the word `supported`, meaning that hypothesis. The benchmark reads
+`supported` as a verdict on the company being clean. Nothing had ever told the model which reading
+was meant, on any of the 14 cases, the whole time.
+
+Once every subject carried a stated proposition and a verdict standard, I ran full live sweeps
+against all 14 cases repeatedly: fix a specific defect a miss pointed at, sweep again, keep whatever
+stopped failing and kept passing, throw out nothing that already worked. It took several sweeps to
+land on the fixes decisions #12 and #13 actually describe, and I'm not going to pretend I remember
+the exact miss list of every intermediate round precisely enough to print it here. What I can stand
+behind precisely is the state everything above converged to, and how I checked it wasn't a fluke.
+
+<!-- osint-harness:tuning-summary -->
+**Final sweep, one investigation at a time, exactly matching how the hosted demo runs (it also
+processes one job at a time): 14 of 14, zero halts, zero crashes.**
+
+| Case | Verdict | Confidence | Steps |
+| --- | --- | --- | --- |
+| anthropic-company | supported | 0.90 | 10 |
+| openai-company | supported | 0.80 | 10 |
+| theranos-company | refuted | 0.95 | 10 |
+| wirecard-company | refuted | 0.92 | 10 |
+| vantage-nebula-company | insufficient_evidence | 0.50 | 10 |
+| ada-lovelace-person | supported | 0.92 | 10 |
+| satya-nadella-person | supported | 0.95 | 10 |
+| john-smith-person | insufficient_evidence | 0.70 | 10 |
+| michael-jordan-researcher-person | supported | 0.80 | 10 |
+| great-wall-from-space-claim | refuted | 0.82 | 10 |
+| einstein-failed-maths-claim | refuted | 0.95 | 10 |
+| einstein-nobel-relativity-claim | partially_supported | 0.95 | 10 |
+| king-of-france-claim | insufficient_evidence | 0.95 | 10 |
+| apollo-11-date-claim | supported | 0.99 | 6 |
+
+The two cases that took the most iteration were `einstein-nobel-relativity-claim`, wrong on every
+sweep before the "set aside the clause" fix landed, and `john-smith-person`, right on early sweeps
+only because a transient provider error halted it before it ever reasoned, then wrong once it
+actually ran to completion, on the same disambiguation mistake the case exists to catch. Both went
+3 for 3 in a focused, repeated re-test once the fix that actually addressed each one landed, and
+correct again here on top of that. That's the evidence this wasn't a lucky single sample: the same
+case, rerun independently, landing the same way every time.
+
+None of this, not one fix, one wording change, or one rerun, was ever checked against the 13
+held-out cases in [`benchmark/holdout.json`](benchmark/holdout.json). The question that actually
+answers "did this generalise, or did I just memorise 14 answers" is what a single sweep against that
+set, run only after every change above was already frozen, comes back with:
+
+**Holdout sweep, same conditions, cases never seen during any of the tuning above: 12 of 13.**
+
+| Case | Verdict | Confidence | Steps |
+| --- | --- | --- | --- |
+| ftx-company | refuted | 0.92 | 10 |
+| enron-company | refuted | 0.92 | 10 |
+| raspberry-pi-company | supported | 0.92 | 10 |
+| quorvane-meridian-company | insufficient_evidence | 0.50 | 10 |
+| marie-curie-person | supported | 0.95 | 10 |
+| jensen-huang-person | supported | 0.95 | 10 |
+| david-jones-person | insufficient_evidence | 0.50 | 10 |
+| michael-collins-astronaut-person | supported | 0.96 | 10 |
+| goldfish-memory-claim | refuted | 0.92 | 10 |
+| armstrong-1968-claim | partially_supported | 0.80 | 10 |
+| eiffel-tower-1889-claim | supported | 0.95 | 10 |
+| german-emperor-claim | insufficient_evidence | 0.95 | 10 |
+| **ten-percent-brain-claim** | **supported** (wrong; expected `refuted`) | 0.75 | 10 |
+
+The same-name trap (`david-jones-person`) and the disambiguation trap
+(`michael-collins-astronaut-person`), the exact two shapes `john-smith-person` and
+`michael-jordan-researcher-person` exist to catch, land correctly on subjects the fix was never run
+against. So does the reason-versus-core-event shape (`armstrong-1968-claim`, right about the
+landing, wrong about the year, correctly `partially_supported`) that `einstein-nobel-relativity-claim`
+took four attempts to reach. Two cases hit a genuine local network fault mid-sweep, `getaddrinfo
+failed`, DNS resolution, not the model or the harness, and I say so rather than quietly dropping
+them: both crashed at step 0 before any reasoning happened, both reran clean once the connection was
+back, and I'm reporting the rerun rather than the network failure because a DNS outage is not a fact
+about whether this harness reasons about the Eiffel Tower correctly.
+
+The one honest miss is worth being precise about rather than waving at. `ten-percent-brain-claim`
+came back `supported` because Appraisal extracted "Humans use only 10 percent of their brains" as an
+assertion from two pages that were actually debunking it, Wikipedia's own
+`Ten-percent-of-the-brain_myth` article and a neuroscience-for-kids page that opens "There is no
+scientific basis" for the claim. Both open by restating the myth before rejecting it, and the
+extraction caught the restatement, not the rejection: it graded those assertions at the lowest
+possible credibility, `CANNOT_BE_JUDGED`, which shows something was already off, but Reconciliation's
+free-text reasoning then called them "high-credibility" anyway and let volume (three restatements
+against one direct refutation) decide it. `goldfish-memory-claim`, the other myth case in this set,
+extracted cleanly, because its sources state the true fact directly ("have a memory span longer than
+three seconds") rather than restating the myth first. I found this by reading the actual retrieved
+document text, not by guessing, and I'm not fixing it now: this is the holdout set, the one sweep
+that has to run only once and only after every other line in this document was already frozen. Taking
+it as a specific piece of future work instead of feeding it back into the prompts is the whole reason
+this table means anything.
+
+<!-- /osint-harness:tuning-summary -->
+
 ---
 
 ## Repository layout
 
 ```
 src/osint_harness/
-  domain/        subjects, provenance and Admiralty grading, evidence and ACH, the investigation
+  domain/        subjects and what a verdict on each means, provenance and Admiralty grading,
+                 evidence and ACH, the investigation
   graph/         the state machine, the six phases, the memory-gated briefing, reply schemas
-  sources/       encyclopedia, page fetch and keyless web search, all behind the record/replay cassette
-  model/         the reasoning client, OpenRouter-backed when live, or scripted for tests
+  sources/       encyclopedia, page fetch and Tavily web search, all behind the record/replay cassette
+  model/         the reasoning client, NVIDIA or OpenRouter when live, or scripted for tests
   memory/        the cross-episode archive and the publisher register
   bench/         benchmark cases, reward, failure taxonomy, run aggregation
   report/        the analyst-facing dossier and the ablation report
-benchmark/       the 14 cases, and the recorded cassette they replay from
+benchmark/       the 14 cases, 13 held-out cases kept out of tuning, and the recorded cassette
+web/             the hosted demo: a FastAPI backend, document checks included, and one static page
 docs/            architecture, design rationale, domain model
 guidelines.md    the engineering standard this was built under
 ```

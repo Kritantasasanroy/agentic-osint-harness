@@ -24,6 +24,29 @@ class Judgment(StrEnum):
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
 
 
+class VerdictStandard(BaseModel):
+    """What reaching each possible judgment asserts about one kind of subject."""
+
+    model_config = ConfigDict(frozen=True)
+
+    supported: str = Field(min_length=1)
+    refuted: str = Field(min_length=1)
+    partially_supported: str = Field(min_length=1)
+    insufficient_evidence: str = Field(min_length=1)
+
+    def meaning(self, judgment: Judgment) -> str:
+        """What reaching this judgment asserts."""
+        match judgment:
+            case Judgment.SUPPORTED:
+                return self.supported
+            case Judgment.REFUTED:
+                return self.refuted
+            case Judgment.PARTIALLY_SUPPORTED:
+                return self.partially_supported
+            case Judgment.INSUFFICIENT_EVIDENCE:
+                return self.insufficient_evidence
+
+
 class ConfidenceBand(StrEnum):
     """An ICD 203 word of estimative probability, carrying its own numeric range."""
 

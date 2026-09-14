@@ -15,7 +15,7 @@ stateDiagram-v2
     APPRAISAL --> RECONCILIATION: assertions extracted and graded
     RECONCILIATION --> REFLECTION: ACH scored, assessment appended
     REFLECTION --> COLLECTION: gaps remain or a high-priority lead is still open
-    REFLECTION --> DISSEMINATION: evidence judged sufficient, or budget nearly spent
+    REFLECTION --> DISSEMINATION: evidence judged sufficient, or no budget left for another round
     DISSEMINATION --> COMPLETE: every citation traced to a retrieval
 
     DIRECTION --> HALTED: budget exhausted
@@ -37,6 +37,12 @@ I added `HALTED` so a non-converging investigation ends visibly instead of just 
 gets recorded as its own step, and a halted episode still stays in the benchmark denominator, tagged
 with why it failed. No quietly dropping the bad runs.
 
+The loop has one brake besides the evidence. Reflection only sends the investigation round again
+while a whole round and the report still fit in the budget, so an investigation that keeps finding
+new questions still ends in a report. That brake used to be too short: it held back two steps when
+a round costs four and the report one more, and three of the last four live runs halted one round
+short of writing anything.
+
 ## What flows where
 
 ```mermaid
@@ -45,8 +51,8 @@ flowchart TB
         direction TB
         MACHINE["InvestigationGraph<br/>routes, records one Step per transition, enforces the budget"]
         PHASES["Direction · Collection · Appraisal<br/>Reconciliation · Reflection · Dissemination"]
-        BRIEF["Briefing<br/>filters state by memory mode"]
-        MODEL["ModelClient · decide() only<br/>LiveModel (OpenRouter) or RehearsedModel<br/>meters its own token spend"]
+        BRIEF["Briefing<br/>the proposition under test and its verdict standard,<br/>then state filtered by memory mode"]
+        MODEL["ModelClient · decide() only<br/>LiveModel (NVIDIA or OpenRouter) or RehearsedModel<br/>meters its own token spend"]
         MACHINE --> PHASES
         PHASES --> BRIEF
         PHASES --> MODEL
@@ -56,7 +62,7 @@ flowchart TB
         CASS["Cassette<br/>replay is the default; a miss is an error"]
         ENC["Encyclopedia"]
         PAGE["PageFetch"]
-        SEARCH["WebSearch<br/>keyless, DuckDuckGo HTML"]
+        SEARCH["WebSearch<br/>Tavily search API, needs a key"]
         CASS --- ENC
         CASS --- PAGE
         CASS --- SEARCH
@@ -97,7 +103,9 @@ them:
 
 **Ground truth stops at the evaluation box.** `BenchmarkCase` only ever sends its `subject` into the
 agent. `Investigator.investigate()` has no overload anywhere that takes a case, so the object holding
-the expected answer physically can't cross over.
+the expected answer physically can't cross over. What each verdict *means* does cross, through the
+subject's own `VerdictStandard`, and that's deliberate: it's the definition of the task, the same
+for every subject of a kind, never the answer for any one of them.
 
 **Reward flows one way.** Nothing inside the agent imports anything from `bench`. Scoring reads the
 finished investigation after the fact. The agent itself never reads its own score.
@@ -109,11 +117,11 @@ it, so anything recalled is structurally incapable of turning into a citation la
 
 | Requirement from the brief | Where it is implemented |
 | --- | --- |
-| Investigate a company, person, or claim | `domain/subject.py`, one mechanism, polymorphic seeds |
-| Gather from multiple external sources | `sources/tools.py`: encyclopedia, page fetch, keyless web search, all cassette-recorded |
+| Investigate a company, person, or claim | `domain/subject.py`, one mechanism, polymorphic seeds, propositions and verdict standards |
+| Gather from multiple external sources | `sources/tools.py`: encyclopedia, page fetch, web search through Tavily, all cassette-recorded |
 | Plan and adapt as new information appears | `graph/phases.py`, `Reflection` reopens `Collection` |
 | Evaluate evidence and source reliability | Admiralty grading in `domain/provenance.py` |
-| Handle conflicting or insufficient information | ACH in `domain/analysis.py`; the sufficiency override in `Reconciliation` |
+| Handle conflicting or insufficient information | ACH in `domain/analysis.py`; the sufficiency override in `Reconciliation`; `VerdictStandard`, which says when abstaining is the right verdict |
 | Short-term and long-term memory | `graph/briefing.py` (in-episode), `memory/archive.py` (across episodes) |
 | Reflect before concluding | `Reflection` phase |
 | Structured report with citations and confidence | `report/dossier.py` |
@@ -122,21 +130,26 @@ it, so anything recalled is structurally incapable of turning into a citation la
 
 ## Invariants, and what actually enforces each
 
-Two of these come from the type system. The rest are enforced by code sitting at a named boundary.
-I've kept that distinction visible on purpose instead of blurring both under one heading, because
-they fail differently if something regresses.
+Three of these come from the type system. The rest are enforced by code sitting at a named
+boundary. I've kept that distinction visible on purpose instead of blurring both under one heading,
+because they fail differently if something regresses.
 
 - **Type system:** an `Investigation` cannot be constructed or deserialised holding a citation with
   no retrieved document behind it, nor without a baseline assessment (`@model_validator`).
 - **Type system:** `Document`, `Evidence`, `Assessment` and `Step` are frozen, so the record of
   what was found and concluded cannot be edited after the fact.
+- **Type system:** a `VerdictStandard` cannot exist without a meaning for every `Judgment`, so no
+  subject kind can reach a verdict nobody defined.
 - **Code, at `record_evidence`:** evidence cannot be added against a document never retrieved.
-- **Code, at the Direction transition:** fewer than two competing hypotheses falls back to the
-  subject's own, because a single-hypothesis investigation is confirmation bias by construction.
+- **Code, at the Direction transition:** the subject's own competing hypotheses are always kept and
+  the analyst can only add to them, because they are written to cover every verdict, and a
+  single-hypothesis investigation is confirmation bias by construction.
 - **Code, at Dissemination:** no report is written while any citation, or any link in the
   narrative, lacks a document behind it.
 - **Code, at Reconciliation:** a conclusive verdict is overridden to insufficient evidence when the
-  gathered weight cannot carry it.
+  gathered weight cannot carry it, or when no hypothesis has actually been tested against it.
+- **Code, at Reflection:** another round only starts while a whole round and the report still fit
+  in the budget, so running out of budget ends in a report rather than a halt.
 - **Code, at the sweep boundary:** long-term memory is cleared before a sweep, so a run is
   reproducible from `(case id, memory mode, cassette)`. I verified this by running `ablate` twice
   and comparing the output.

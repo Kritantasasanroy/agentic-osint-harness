@@ -80,6 +80,9 @@ class LiveModel(ModelClient):
 
     MIN_SECONDS_BETWEEN_CALLS_NVIDIA = 0.5
     MIN_SECONDS_BETWEEN_CALLS_OPENROUTER = 3.5
+    # ponytail: fixed backoff schedule; honour Retry-After if a provider starts sending one
+    RETRY_DELAYS_SECONDS = (5.0, 20.0, 60.0)
+    MALFORMED_REPLY_RETRIES = 1
 
     def __init__(
         self,
@@ -93,7 +96,7 @@ class LiveModel(ModelClient):
         # or split the heaviest phases into smaller calls, if this recurs in practice.
         max_tokens: int = 16000,
         reasoning_effort: str = "low",
-        timeout_seconds: float = 90.0,
+        timeout_seconds: float = 180.0,
     ) -> None:
         super().__init__()
         nvidia_key = os.environ.get("NVIDIA_API_KEY")
@@ -128,20 +131,30 @@ class LiveModel(ModelClient):
         self._last_call_at: float | None = None
 
     def decide[T: BaseModel](self, purpose: str, system: str, prompt: str, schema: type[T]) -> T:
-        self._respect_rate_limit()
-        response = self._client.post(
-            self._endpoint,
-            json={
-                "model": self._model,
-                "max_tokens": self._max_tokens,
-                "response_format": {"type": "json_object"},
-                "reasoning": {"effort": self._reasoning_effort},
-                "messages": [
-                    {"role": "system", "content": self._json_instruction(system, schema)},
-                    {"role": "user", "content": prompt},
-                ],
-            },
-        )
+        """Ask for a decision, asking once more if the reply is not the JSON the schema needs.
+
+        A malformed reply is one sample from a stochastic model, not a verdict on the prompt. A
+        live sweep had an investigation that had already reached its correct verdict halt one step
+        short of its report because the model wrote `{"{"": ""` for a reflection. Asking again
+        costs one more call, charged like any other; a second malformed reply still halts.
+        """
+        # ponytail: a caller metering "one call" (HostedModel's daily allowance) undercounts a
+        # retried decide() by up to 4x in real HTTP requests; raise if that ever needs charging
+        # per request rather than per decide()
+        instruction = self._json_instruction(system, schema)
+        retries_left = self.MALFORMED_REPLY_RETRIES
+        while True:
+            content = self._reply_content(purpose, instruction, prompt)
+            try:
+                return self._validated(content, schema, purpose)
+            except ModelUnavailableError:
+                if retries_left == 0:
+                    raise
+                retries_left -= 1
+
+    def _reply_content(self, purpose: str, instruction: str, prompt: str) -> str:
+        """The text of one reply, refusing a refusal and an empty answer outright."""
+        response = self._posted(purpose, instruction, prompt)
         completion = self._parsed(response, purpose)
         choice = self._only_choice(completion, purpose)
         if choice.finish_reason == "content_filter" or choice.message.refusal:
@@ -149,7 +162,61 @@ class LiveModel(ModelClient):
         content = choice.message.content
         if not content or not content.strip():
             raise ModelUnavailableError(self._empty_reply_reason(purpose, choice))
-        return self._validated(content, schema, purpose)
+        return content
+
+    def _posted(self, purpose: str, instruction: str, prompt: str) -> httpx.Response:
+        """The provider's reply, waited out through a brief outage instead of ending on one.
+
+        A live sweep showed why this has to exist. With a few investigations running at once,
+        NVIDIA's free endpoint answered "Service temporarily overloaded" and 429 within seconds of
+        starting, and each affected investigation halted on its first unlucky call, minutes of
+        work thrown away over a condition that clears by itself. Only a throttle, a server-side
+        failure or a connection that never completed is retried, each after a longer pause than
+        the last; everything else comes straight back as before, and a failure that outlasts every
+        pause still halts the investigation visibly. A connection failure becomes
+        `ModelUnavailableError` for the same reason: raised raw, an `httpx` error is not something
+        the investigator catches, so it crashed the run where a model failure halts it.
+        """
+        for delay in self.RETRY_DELAYS_SECONDS:
+            try:
+                response = self._post_once(instruction, prompt)
+            except httpx.TransportError:
+                time.sleep(delay)
+                continue
+            if not self._says_try_again(response):
+                return response
+            time.sleep(delay)
+        try:
+            return self._post_once(instruction, prompt)
+        except httpx.TransportError as failure:
+            raise ModelUnavailableError(
+                f"could not reach {self._provider_name()} during {purpose}: {failure}"
+            ) from failure
+
+    def _post_once(self, instruction: str, prompt: str) -> httpx.Response:
+        """One request to the provider, paced like every other."""
+        self._respect_rate_limit()
+        return self._client.post(
+            self._endpoint,
+            json={
+                "model": self._model,
+                "max_tokens": self._max_tokens,
+                "response_format": {"type": "json_object"},
+                "reasoning": {"effort": self._reasoning_effort},
+                "messages": [
+                    {"role": "system", "content": instruction},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+        )
+
+    @classmethod
+    def _says_try_again(cls, response: httpx.Response) -> bool:
+        """Whether a reply is a throttle or a server-side failure, not a verdict on the request."""
+        return (
+            response.status_code == httpx.codes.TOO_MANY_REQUESTS
+            or response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR
+        )
 
     def _empty_reply_reason(self, purpose: str, choice: ChatChoice) -> str:
         """A diagnosable reason for an empty reply, distinguishing exhaustion from silence."""
@@ -197,7 +264,8 @@ class LiveModel(ModelClient):
         completion = ChatCompletion.model_validate(body)
         if completion.error is not None:
             raise ModelUnavailableError(
-                f"{self._provider_name()} reported an error during {purpose}: "
+                f"{self._provider_name()} reported an error during {purpose} "
+                f"(HTTP {response.status_code}): "
                 f"{completion.error.message or completion.error.code}"
             )
         if response.status_code == httpx.codes.TOO_MANY_REQUESTS:

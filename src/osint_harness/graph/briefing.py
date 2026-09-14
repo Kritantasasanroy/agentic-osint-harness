@@ -1,4 +1,4 @@
-from osint_harness.domain.analysis import Evidence, Hypothesis
+from osint_harness.domain.analysis import Evidence, Hypothesis, Judgment
 from osint_harness.domain.investigation import Investigation
 from osint_harness.domain.provenance import Document
 
@@ -11,6 +11,10 @@ class Briefing:
     Under `SHORT` it also carries the episode's accumulated working state. Under `LONG` it carries
     recalled priors from earlier investigations as well, labelled as recall so they can never be
     mistaken for evidence gathered in this episode.
+
+    The proposition under test and the verdict standard are given in every mode, for the same reason
+    the opening hypotheses are: they state the question rather than accumulate findings, so
+    withholding them would remove the task rather than model a weaker memory.
     """
 
     def __init__(self, investigation: Investigation) -> None:
@@ -27,7 +31,15 @@ class Briefing:
 
     def _subject(self) -> str:
         subject = self._investigation.subject
-        return f"SUBJECT ({subject.kind.value}): {subject.descriptor()}"
+        standard = subject.verdict_standard()
+        meanings = "\n".join(
+            f"- {judgment.value}: {standard.meaning(judgment)}" for judgment in Judgment
+        )
+        return (
+            f"SUBJECT ({subject.kind.value}): {subject.descriptor()}\n"
+            f"PROPOSITION UNDER TEST: {subject.proposition_under_test()}\n"
+            f"VERDICT STANDARD (what each judgment on that proposition means):\n{meanings}"
+        )
 
     def _preceding_output(self) -> str:
         if not self._investigation.steps:

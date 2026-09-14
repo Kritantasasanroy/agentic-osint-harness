@@ -73,8 +73,13 @@ class ReconciliationResult(BaseModel):
     """The ACH matrix as filled in this round, and the conclusion the analyst draws from it."""
 
     calls: tuple[ConsistencyCall, ...] = ()
-    judgment: Judgment = Judgment.INSUFFICIENT_EVIDENCE
-    probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    judgment: Judgment = Field(
+        default=Judgment.INSUFFICIENT_EVIDENCE,
+        description="A verdict on the proposition under test, as the verdict standard defines it.",
+    )
+    probability: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="The probability that the judgment is correct."
+    )
     rationale: str = ""
 
 

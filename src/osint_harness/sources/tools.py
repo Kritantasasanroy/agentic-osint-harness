@@ -75,9 +75,15 @@ class PlainText(HTMLParser):
 
     @classmethod
     def of(cls, html: str) -> str:
-        """Read an HTML document and return its readable text."""
+        """Read an HTML document and return its readable text.
+
+        `<![` is escaped before parsing, because Python 3.12's parser raises `AssertionError` on a
+        marked section it does not recognise. Some real pages still carry one (`<![if !IE]>`), and
+        a live run hit it on bytes that were never HTML at all, which crashed the investigation
+        instead of failing one lookup. Escaped, it simply reads as text.
+        """
         reader = cls()
-        reader.feed(html)
+        reader.feed(html.replace("<![", "&lt;!["))
         return reader.text()
 
 
@@ -147,6 +153,10 @@ class Encyclopedia(Tool):
 class PageFetch(Tool):
     """A specific web page, pulled so a cited claim can be read at its own source."""
 
+    READABLE_TYPES: ClassVar[frozenset[str]] = frozenset(
+        {"text/html", "application/xhtml+xml", "text/plain"}
+    )
+
     @property
     def name(self) -> str:
         return "page_fetch"
@@ -159,9 +169,22 @@ class PageFetch(Tool):
             follow_redirects=True,
         )
         response.raise_for_status()
+        self._refuse_what_is_not_a_page(response)
         # ponytail: stdlib tag-strip, swap for trafilatura if extraction quality limits evidence
         text = PlainText.of(response.text)
         return (Document.retrieved(url=str(response.url), title=self._title_of(text), text=text),)
+
+    def _refuse_what_is_not_a_page(self, response: httpx.Response) -> None:
+        """Refuse a reply that is not a page of text, instead of stripping tags out of its bytes.
+
+        Live runs read PDFs through this tool as if they were HTML. Three documents in one
+        investigation came out hundreds of thousands of characters long and about half binary, and
+        all three went into the evidence pool. A refusal is recorded as the failed lookup it is.
+        """
+        # ponytail: PDFs are refused; read them with pypdf if primary filings prove to matter
+        content_type = response.headers.get("content-type", "").partition(";")[0].strip().lower()
+        if content_type and content_type not in self.READABLE_TYPES:
+            raise httpx.HTTPError(f"{content_type} is not a page that can be read as text")
 
     def _title_of(self, text: str) -> str:
         """A usable title for a page whose markup did not give a clean one."""

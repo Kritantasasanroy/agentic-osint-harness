@@ -195,11 +195,6 @@
       "query": "einstein-nobel-relativity",
       "tool": "encyclopedia"
     },
-    "6b8b524d83416005": {
-      "documents": [],
-      "query": "\"Ada Lovelace\" \"Charles Babbage\" \"Menabrea\" 1843",
-      "tool": "web_search"
-    },
     "793214c50aae737e": {
       "documents": [
         {
@@ -321,21 +316,6 @@
       "query": "https://www.computerhistory.org/babbage/ada-lovelace/",
       "tool": "page_fetch"
     },
-    "96854eac46b23715": {
-      "documents": [],
-      "query": "\"Ada King-Noel\" OR \"Augusta Ada King-Noel\" \"Countess of Lovelace\"",
-      "tool": "web_search"
-    },
-    "ab37b8b73da58ecc": {
-      "documents": [],
-      "query": "site:archives.bodleian.ox.ac.uk \"Lovelace-Byron\"",
-      "tool": "web_search"
-    },
-    "ac4f02364d59f0f4": {
-      "documents": [],
-      "query": "\"Ada Lovelace\" \"10 December 1815\" \"27 November 1852\"",
-      "tool": "web_search"
-    },
     "acf3f1c0f60d2c5b": {
       "documents": [
         {
@@ -430,11 +410,6 @@
       "query": "Anthropic (artificial intelligence research company)",
       "tool": "encyclopedia"
     },
-    "e268213f8b0f30bd": {
-      "documents": [],
-      "query": "\"Augusta Ada Byron\" 1815 1852 baptism marriage burial will probate",
-      "tool": "web_search"
-    },
     "e584e016a907e142": {
       "documents": [
         {
@@ -461,11 +436,6 @@
       ],
       "query": "Michael Jordan (machine learning researcher, University of California, Berkeley)",
       "tool": "encyclopedia"
-    },
-    "e646981440177da4": {
-      "documents": [],
-      "query": "\"Ada Lovelace\" \"Augusta Ada Byron\" \"Countess of Lovelace\"",
-      "tool": "web_search"
     },
     "f51407b938b20673": {
       "documents": [

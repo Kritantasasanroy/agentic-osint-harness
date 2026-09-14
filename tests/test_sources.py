@@ -56,6 +56,7 @@ class FakeResponse:
         self._payload = payload
         self.text = text
         self.url = url
+        self.headers: dict[str, str] = {}
 
     def json(self) -> object:
         return self._payload
@@ -263,3 +264,44 @@ class TestPageFetchRetrieval:
         documents = PageFetch(Cassette(mode=CassetteMode.RECORD)).retrieve("https://reuters.com/x")
         assert documents[0].text == "Acme filed accounts."
         assert documents[0].source_domain == "reuters.com"
+
+
+class TypedResponse(FakeResponse):
+    """A fake response that also declares what kind of content it carries."""
+
+    def __init__(self, text: str, content_type: str) -> None:
+        super().__init__(text=text, url="https://example.com/file")
+        self.headers = {"content-type": content_type}
+
+
+class TestUnreadablePages:
+    """Found live: the fetcher read PDFs as if they were HTML. Three documents in one Wirecard
+    investigation were PDFs stripped of "tags" into hundreds of thousands of characters, about half
+    of them binary, all recorded as evidence; in a later run a byte sequence starting `<![` crashed
+    the HTML parser and took the whole investigation down with it."""
+
+    def test_an_unrecognised_marked_section_is_read_as_text_rather_than_crashing(self) -> None:
+        text = PlainText.of("<p>kept</p><![if !IE]><p>also kept</p><![8}~")
+
+        assert "kept" in text
+        assert "also kept" in text
+
+    def test_a_pdf_is_refused_as_a_failed_lookup_rather_than_read_as_a_page(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            httpx, "get", lambda *_args, **_kwargs: TypedResponse("%PDF-1.7 ...", "application/pdf")
+        )
+
+        with pytest.raises(httpx.HTTPError, match="application/pdf"):
+            PageFetch(Cassette(mode=CassetteMode.RECORD)).retrieve("https://example.com/file.pdf")
+
+    def test_a_declared_html_page_with_a_charset_is_still_read(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        page = TypedResponse("<p>Acme filed.</p>", "text/html; charset=utf-8")
+        monkeypatch.setattr(httpx, "get", lambda *_args, **_kwargs: page)
+
+        documents = PageFetch(Cassette(mode=CassetteMode.RECORD)).retrieve("https://example.com/a")
+
+        assert documents[0].text == "Acme filed."

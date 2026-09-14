@@ -39,9 +39,11 @@ harness works), or **plumbing** (no business meaning).
 > The entity or proposition an investigation is about.
 
 Abstract base. Owns identity (a display name, and disambiguating qualifiers such as a jurisdiction
-or a date). Its one piece of polymorphic behaviour is `seed_leads()`, which returns the opening
-lines of enquiry for that kind of subject. This is where the three subject kinds differ, and the
-only place they do.
+or a date). Its polymorphic behaviour is what each kind of subject means to an investigation:
+`seed_leads()`, the opening lines of enquiry; `opening_hypotheses()`, the competing answers stated
+before any evidence; `proposition_under_test()`, the one statement the verdict is a verdict on; and
+`verdict_standard()`, a `VerdictStandard` saying what each `Judgment` asserts about that statement
+for this kind of subject. This is where the three subject kinds differ, and the only place they do.
 
 Subtypes (`Company`, `Person`, `Claim`) are genuine *kinds*, not states: "company" can never
 become false for a given subject, so they pass the qualifier test and are not adjective-on-noun

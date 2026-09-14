@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from osint_harness.domain.analysis import VerdictStandard
+
 
 class SubjectKind(StrEnum):
     """The category of thing an investigation is about."""
@@ -28,6 +30,22 @@ class Subject(BaseModel):
     @abstractmethod
     def opening_hypotheses(self) -> tuple[str, ...]:
         """Competing answers to state before any evidence is gathered."""
+
+    @abstractmethod
+    def proposition_under_test(self) -> str:
+        """The single statement this investigation's verdict is a verdict on."""
+
+    @abstractmethod
+    def verdict_standard(self) -> VerdictStandard:
+        """What each judgment asserts about this kind of subject.
+
+        A verdict means nothing until it is clear what it is a verdict on, and for a long time no
+        prompt said. Live runs on Theranos and Wirecard weighed the evidence correctly, ruling out
+        the hypothesis that each company was clean and leading with the one that it had adverse
+        findings, then reported `supported`, meaning that hypothesis was supported. The benchmark
+        reads the same word as a verdict on the company being clean, so a correct analysis was
+        scored wrong, and nothing had ever told the model which reading applied.
+        """
 
     def descriptor(self) -> str:
         """The subject rendered as a single searchable phrase."""
@@ -62,6 +80,37 @@ class Company(Subject):
             "than the one intended.",
         )
 
+    def proposition_under_test(self) -> str:
+        return (
+            f"{self.descriptor()} is a real entity that operates as described, with no material "
+            "adverse findings against it."
+        )
+
+    def verdict_standard(self) -> VerdictStandard:
+        return VerdictStandard(
+            supported=(
+                "it exists and operates as described, and nothing retrieved shows a material "
+                "adverse finding against it"
+            ),
+            refuted=(
+                "retrieved evidence shows a material adverse finding against it, or shows that it "
+                "is materially not what it is described as, including that it no longer operates. "
+                "A material adverse finding is an established fraud, a criminal conviction for "
+                "conduct in the business, sanctions, insolvency or collapse, or regulatory action "
+                "that stopped its core business; allegations, lawsuits, settlements, open "
+                "investigations, criticism and routine fines are not"
+            ),
+            partially_supported=(
+                "it exists and operates, but part of its description is materially wrong, short "
+                "of a material adverse finding"
+            ),
+            insufficient_evidence=(
+                "no credible record establishes that it exists or what it does, or the name cannot "
+                "be tied to one specific entity; finding no record of it is not proof that it does "
+                "not exist"
+            ),
+        )
+
 
 class Person(Subject):
     """An individual human being, identified by name and disambiguating context."""
@@ -80,11 +129,46 @@ class Person(Subject):
 
     def opening_hypotheses(self) -> tuple[str, ...]:
         return (
-            f"The public record for {self.name} refers to one identifiable individual and is "
-            "broadly accurate.",
-            f"The public record for {self.name} conflates two or more distinct individuals "
-            "sharing that name.",
-            f"There is no substantive public record for the {self.name} intended here.",
+            f"The name {self.name}, together with any qualifiers given, picks out one specific, "
+            "real individual, and the public record about that individual is accurate.",
+            f"The name {self.name} is shared by multiple distinct real people, and nothing given, "
+            "including any qualifiers, distinguishes which one is meant. Finding an abundant, "
+            "internally consistent record for one prominent bearer of the name does not by "
+            "itself establish that they are the one meant: a record can be extensive and still "
+            "belong to the wrong person.",
+            f"There is no substantive public record for anyone answering to {self.name} as "
+            "described.",
+        )
+
+    def proposition_under_test(self) -> str:
+        described = self.descriptor()
+        if self.affiliation and self.affiliation not in self.qualifiers:
+            described = f"{described}, associated with {self.affiliation}"
+        return (
+            f"The subject described as {described} is one specific, real individual, and what "
+            "that description says about them is accurate."
+        )
+
+    def verdict_standard(self) -> VerdictStandard:
+        return VerdictStandard(
+            supported=(
+                "the name and description pick out one specific, real individual, and what the "
+                "description says about them is accurate"
+            ),
+            refuted=(
+                "one individual can be identified, but the description is materially wrong about "
+                "them"
+            ),
+            partially_supported=(
+                "one individual can be identified, and the description is right about them in "
+                "part but materially wrong in part"
+            ),
+            insufficient_evidence=(
+                "the name and description do not pin down one individual, because the public "
+                "record covers several different people who fit them, or no substantive record of "
+                "such a person exists; choosing one of several people who share a name is a "
+                "guess, not a finding, however much is known about the one guessed at"
+            ),
         )
 
 
@@ -105,10 +189,50 @@ class Claim(Subject):
 
     def opening_hypotheses(self) -> tuple[str, ...]:
         return (
-            f"The assertion is accurate as stated: {self.proposition}",
-            f"The assertion is inaccurate as stated: {self.proposition}",
-            "The assertion is partly accurate but materially misleading as stated.",
-            "The assertion rests on a false or undefined premise and cannot be evaluated as put.",
+            f"Every specific detail the assertion states is accurate: {self.proposition}",
+            "What the assertion presupposes is real, and, setting aside any clause giving the "
+            "reason, date, place, manner or actor, the core event or state of affairs that "
+            f"remains did not happen or does not hold at all: {self.proposition}",
+            "What the assertion presupposes is real, and, setting aside any clause giving the "
+            "reason, date, place, manner or actor, the core event or state of affairs that "
+            f"remains did happen or does hold, but that set-aside clause is wrong: "
+            f"{self.proposition}",
+            "The assertion presupposes something that is not real, such as an office nobody "
+            f"currently holds, so it cannot be evaluated as true or false as put: "
+            f"{self.proposition}",
+        )
+
+    def proposition_under_test(self) -> str:
+        return self.proposition
+
+    def verdict_standard(self) -> VerdictStandard:
+        return VerdictStandard(
+            supported=(
+                "retrieved evidence establishes the proposition as stated, including every detail "
+                "it attaches"
+            ),
+            refuted=(
+                "what the proposition presupposes is real. Set aside any clause giving the "
+                "reason, date, place, manner or actor; what remains is the core event. Refuted "
+                "means retrieved evidence shows that core event itself did not happen or does not "
+                "hold, never merely that the set-aside clause is wrong while the core event is "
+                "true, that is partially supported, and never merely that what the proposition "
+                "presupposes is itself unreal, that is insufficient evidence"
+            ),
+            partially_supported=(
+                "what the proposition presupposes is real. Set aside any clause giving the "
+                "reason, date, place, manner or actor; what remains is the core event, and "
+                "retrieved evidence shows that core event did happen or does hold, but the "
+                "set-aside clause itself is wrong. For instance, 'X did A for reason B' is "
+                "partially supported, not refuted, when X did A but not for reason B, because "
+                "the core event, X doing A, is true even though the reason is not; likewise 'X "
+                "did A in year Y' is partially supported when X did A but not in year Y"
+            ),
+            insufficient_evidence=(
+                "the evidence does not settle it, or the proposition presupposes something that is "
+                "not real, such as an office nobody currently holds, which leaves it neither true "
+                "nor false as put"
+            ),
         )
 
 

@@ -67,6 +67,7 @@ class Dossier:
             [
                 "## Verdict",
                 "",
+                f"- **Proposition under test:** {investigation.subject.proposition_under_test()}",
                 f"- **Judgment:** {assessment.judgment.value.replace('_', ' ')}",
                 f"- **Confidence:** {assessment.band().value} "
                 f"({low:.0%} to {high:.0%}), stated {assessment.probability:.2f}",

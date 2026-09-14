@@ -1,0 +1,233 @@
+{
+  "cases": [
+    {
+      "case_id": "ftx-company",
+      "subject": {
+        "kind": "company",
+        "name": "FTX Trading Ltd",
+        "qualifiers": ["cryptocurrency exchange"],
+        "jurisdiction": "Antigua and Barbuda"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.75, "highest": 0.97 },
+      "must_establish": [
+        "FTX filed for bankruptcy in November 2022",
+        "its founder was convicted of fraud",
+        "customer funds were misused"
+      ],
+      "trap": "adverse_media",
+      "notes": "Held out from tuning. A collapsed exchange whose founder was convicted of fraud: the same shape as the Theranos and Wirecard cases, on a subject the tuning never ran."
+    },
+    {
+      "case_id": "enron-company",
+      "subject": {
+        "kind": "company",
+        "name": "Enron Corporation",
+        "qualifiers": ["energy trading company"],
+        "jurisdiction": "United States"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.75, "highest": 0.97 },
+      "must_establish": [
+        "Enron filed for bankruptcy in 2001",
+        "its accounts concealed debt and losses",
+        "senior executives were convicted"
+      ],
+      "trap": "adverse_media",
+      "notes": "Held out from tuning. Decades of coverage, much of it retrospective, so the adverse findings have to be separated from the history of a company that once operated normally."
+    },
+    {
+      "case_id": "raspberry-pi-company",
+      "subject": {
+        "kind": "company",
+        "name": "Raspberry Pi Holdings",
+        "qualifiers": ["single-board computer maker"],
+        "jurisdiction": "United Kingdom"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "it makes the Raspberry Pi single-board computers",
+        "it is listed on the London Stock Exchange",
+        "it is based in Cambridge"
+      ],
+      "trap": "none",
+      "notes": "Held out from tuning. A well-documented operating company with no material adverse findings, as the baseline companies are."
+    },
+    {
+      "case_id": "quorvane-meridian-company",
+      "subject": {
+        "kind": "company",
+        "name": "Quorvane Meridian Holdings",
+        "qualifiers": ["private investment firm"],
+        "jurisdiction": "unknown"
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.25, "highest": 0.60 },
+      "must_establish": [
+        "no credible public record of this entity was found"
+      ],
+      "trap": "insufficient_evidence",
+      "notes": "Held out from tuning. An invented company, like Vantage Nebula Holdings. The only defensible answer is that the evidence does not support any conclusion."
+    },
+    {
+      "case_id": "marie-curie-person",
+      "subject": {
+        "kind": "person",
+        "name": "Marie Curie",
+        "qualifiers": ["physicist and chemist"],
+        "affiliation": "University of Paris"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.80, "highest": 0.97 },
+      "must_establish": [
+        "she won Nobel Prizes in both physics and chemistry",
+        "she researched radioactivity",
+        "she worked in Paris"
+      ],
+      "trap": "none",
+      "notes": "Held out from tuning. Baseline person with an unambiguous identity and a deep, consistent record."
+    },
+    {
+      "case_id": "jensen-huang-person",
+      "subject": {
+        "kind": "person",
+        "name": "Jensen Huang",
+        "qualifiers": ["technology executive"],
+        "affiliation": "NVIDIA"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.80, "highest": 0.97 },
+      "must_establish": [
+        "he co-founded NVIDIA",
+        "he is its chief executive"
+      ],
+      "trap": "none",
+      "notes": "Held out from tuning. Living person, unambiguous identity, abundant primary sourcing."
+    },
+    {
+      "case_id": "david-jones-person",
+      "subject": {
+        "kind": "person",
+        "name": "David Jones",
+        "qualifiers": [],
+        "affiliation": ""
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.25, "highest": 0.60 },
+      "must_establish": [
+        "the name alone does not identify one individual",
+        "the public record covers many distinct people of this name"
+      ],
+      "trap": "same_name",
+      "notes": "Held out from tuning. The same trap as John Smith: with no qualifiers there is no identifiable subject, and picking the most famous bearer of the name is a guess."
+    },
+    {
+      "case_id": "michael-collins-astronaut-person",
+      "subject": {
+        "kind": "person",
+        "name": "Michael Collins",
+        "qualifiers": ["astronaut", "Apollo 11 command module pilot"],
+        "affiliation": "NASA"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "he piloted the Apollo 11 command module",
+        "he is a different person from the Irish revolutionary of the same name"
+      ],
+      "trap": "disambiguation",
+      "notes": "Held out from tuning. A resolvable identity sharing a name with a famous Irish revolutionary leader. The qualifiers are enough, so abstaining is wrong here."
+    },
+    {
+      "case_id": "ten-percent-brain-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "ten-percent-brain",
+        "qualifiers": [],
+        "proposition": "Humans use only 10 percent of their brains.",
+        "asserted_about": "the human brain"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.75, "highest": 0.97 },
+      "must_establish": [
+        "brain imaging shows activity across virtually all of the brain",
+        "the claim is a widely repeated myth"
+      ],
+      "trap": "popular_myth",
+      "notes": "Held out from tuning. A high-volume myth whose correction is well sourced."
+    },
+    {
+      "case_id": "goldfish-memory-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "goldfish-memory",
+        "qualifiers": [],
+        "proposition": "Goldfish have a memory span of only three seconds.",
+        "asserted_about": "goldfish"
+      },
+      "expected": "refuted",
+      "confidence": { "lowest": 0.70, "highest": 0.95 },
+      "must_establish": [
+        "experiments show goldfish retain learned behaviour for months",
+        "the claim is a popular myth"
+      ],
+      "trap": "popular_myth",
+      "notes": "Held out from tuning. Repeated far more often than it is corrected."
+    },
+    {
+      "case_id": "armstrong-1968-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "armstrong-1968",
+        "qualifiers": [],
+        "proposition": "Neil Armstrong became the first person to walk on the Moon in 1968.",
+        "asserted_about": "Neil Armstrong"
+      },
+      "expected": "partially_supported",
+      "confidence": { "lowest": 0.60, "highest": 0.90 },
+      "must_establish": [
+        "Neil Armstrong was the first person to walk on the Moon",
+        "that happened in July 1969, not 1968"
+      ],
+      "trap": "none",
+      "notes": "Held out from tuning. Right about what happened and wrong about when, which is the shape a partially-supported verdict exists for."
+    },
+    {
+      "case_id": "eiffel-tower-1889-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "eiffel-tower-1889",
+        "qualifiers": [],
+        "proposition": "The Eiffel Tower was completed in 1889.",
+        "asserted_about": "the Eiffel Tower"
+      },
+      "expected": "supported",
+      "confidence": { "lowest": 0.85, "highest": 0.98 },
+      "must_establish": [
+        "the tower was completed in 1889",
+        "it was built for the 1889 Exposition Universelle"
+      ],
+      "trap": "none",
+      "notes": "Held out from tuning. Baseline claim with abundant primary sourcing, so hedging has a floor to be measured against."
+    },
+    {
+      "case_id": "german-emperor-claim",
+      "subject": {
+        "kind": "claim",
+        "name": "german-emperor-vegetarian",
+        "qualifiers": [],
+        "proposition": "The current Emperor of Germany is a vegetarian.",
+        "asserted_about": "the German head of state"
+      },
+      "expected": "insufficient_evidence",
+      "confidence": { "lowest": 0.35, "highest": 0.75 },
+      "must_establish": [
+        "Germany has had no emperor since 1918",
+        "the assertion rests on a premise that does not hold, so it cannot be evaluated as put"
+      ],
+      "trap": "false_premise",
+      "notes": "Held out from tuning. The same false-premise trap as the King of France case, on a different presupposition."
+    }
+  ]
+}

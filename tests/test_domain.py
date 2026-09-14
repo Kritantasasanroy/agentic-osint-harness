@@ -153,9 +153,63 @@ class TestSubjectPolymorphism:
         person = Person(name="John Smith")
         assert "distinguishes them" in person.seed_leads()[0]
 
+    def test_finding_much_about_one_bearer_of_a_name_does_not_settle_which_one_is_meant(
+        self,
+    ) -> None:
+        """Two live rounds gave John Smith a correct `insufficient_evidence`, then a third,
+        running to completion for the first time rather than halting partway, retrieved an
+        abundant, internally consistent record for the historical Captain John Smith and reported
+        `supported` at 0.85: 'sources describe the same historical figure... supporting the
+        existence of a single identifiable individual.' The old wording asked whether the record
+        'conflates' distinct people, a property of how well an investigation goes, not of whether
+        the query itself picked anyone out; a query with no qualifiers can never pick anyone out,
+        no matter how clean the record for whichever bearer Collection happens to retrieve."""
+        ambiguous = Person(name="John Smith").opening_hypotheses()[1]
+
+        assert "does not by itself establish" in ambiguous
+        assert "extensive" in ambiguous or "abundant" in ambiguous
+
     def test_descriptor_folds_qualifiers_into_one_searchable_phrase(self) -> None:
         company = Company(name="Acme", qualifiers=("Delaware", "software"))
         assert company.descriptor() == "Acme (Delaware, software)"
+
+    def test_a_verdict_is_always_about_a_stated_proposition(self) -> None:
+        claim = Claim(name="acme-revenue", proposition="Acme Corp earned $1B in 2024.")
+        named = Person(name="Jane Doe", affiliation="Acme Corp")
+        qualified = Person(name="Jane Doe", qualifiers=("Acme Corp",), affiliation="Acme Corp")
+
+        assert claim.proposition_under_test() == "Acme Corp earned $1B in 2024."
+        assert "associated with Acme Corp" in named.proposition_under_test()
+        assert qualified.proposition_under_test().count("Acme Corp") == 1
+
+    def test_claim_hypotheses_separate_the_core_event_from_an_attached_detail(self) -> None:
+        """Two live rounds on einstein-nobel-relativity kept scoring 'inaccurate as stated' and
+        'partly accurate but misleading' as equally consistent with the same evidence and then
+        reporting refuted, because both were about the assertion 'as stated' as a whole rather than
+        about whether the core event happened. A compound assertion ("X did A for reason B") is
+        trivially inaccurate as a whole the moment any part is wrong, which makes that hypothesis
+        never actually distinct from a partial one worded the same way. Wording both around the
+        core event instead of the assertion as a whole keeps them apart. A further live round then
+        had 'wholly false' absorb a false-premise case (the King of France) that had been correct
+        twice before, since 'does not hold at all' reads just as naturally as 'the premise itself
+        is unreal'. Both wholly-false and partly-true now explicitly presuppose a real premise, so
+        an unreal one routes to its own hypothesis instead. Even with all of that, one more live
+        round still called the Einstein case 'refuted', reasoning that the prize being for the
+        photoelectric effect meant 'the core claim... did not occur' outright, still treating the
+        reason clause as inseparable from the event it was attached to. Naming the exact clause to
+        set aside and stating what is left over as a mechanical step, rather than leaving 'core
+        event' for the model to identify unaided, is the next attempt."""
+        claim = Claim(name="award-claim", proposition="X received an award for reason Y.")
+        wholly_wrong, partly_wrong, false_premise = claim.opening_hypotheses()[1:4]
+
+        assert "presupposes is real" in wholly_wrong
+        assert "setting aside any clause" in wholly_wrong
+        assert "did not happen or does not hold" in wholly_wrong
+        assert "presupposes is real" in partly_wrong
+        assert "setting aside any clause" in partly_wrong
+        assert "did happen or does hold" in partly_wrong
+        assert "set-aside clause is wrong" in partly_wrong
+        assert "presupposes something that is not real" in false_premise
 
 
 class TestInvestigation:

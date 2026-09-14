@@ -19,9 +19,9 @@ Three instruments, each one external to this codebase and checkable against a pu
   which is the only reason it can be Brier-scored at all.
 
 One thing this bought me for free: all three subject kinds collapse into one mechanism. A company, a
-person, and a claim all boil down to "a set of competing hypotheses, resolved by ACH." The subject
-kind only picks the opening questions. Nothing else. There's no conditional chain branching on type
-anywhere in the agent.
+person, and a claim all boil down to "a proposition, a set of competing hypotheses about it, resolved
+by ACH." The subject kind picks the opening questions and says what each verdict means for that kind
+of subject. Nothing else. There's no conditional chain branching on type anywhere in the agent.
 
 ## 2. Design choices and why I made them
 
@@ -92,15 +92,21 @@ call. I switched that off. For a product, that tradeoff is sensible. For a bench
 because it silently mixes episodes from two different models into one comparison. A failure just
 raises, gets tagged, and stays in the denominator instead of vanishing.
 
-### OpenRouter, one specific free model, and what running it live actually taught me
+### One free model, two providers, and what running it live actually taught me
 
 `ModelClient` needs exactly one thing from a provider: turn a prompt into valid structured JSON.
-Nothing else. So the harness runs on OpenRouter rather than a single vendor's API, which makes the
-provider a one-line swap and opens up models priced at zero. That comes with a real catch: the free
-tier is rate-limited, not metered (20 requests a minute, 50 a day with no credits ever purchased,
-1,000 a day past a one-time $10 minimum), governed per account rather than per key. `LiveModel` paces
-calls to respect the per-minute ceiling. The daily ceiling can't be lifted from inside the harness at
-all, which is exactly why the live results below are a deliberately bounded run, not the full sweep.
+Nothing else. So the harness talks to an OpenAI-compatible chat API rather than one vendor's SDK,
+which made the provider a one-line swap, and OpenRouter opened up models priced at zero. That came
+with a real catch: OpenRouter's free tier is rate-limited, not metered (20 requests a minute, 50 a
+day with no credits ever purchased, 1,000 a day past a one-time $10 minimum), governed per account
+rather than per key. The daily ceiling stopped being theoretical partway through verifying the hosted
+demo, when a day of real testing used all 50 and the error said so in as many words:
+`Rate limit exceeded: free-models-per-day`. NVIDIA serves the same model directly through its own
+API, so `LiveModel` now speaks to both and picks whichever key is present, NVIDIA first. I measured
+the difference rather than assuming it: OpenRouter needs 3.5 seconds between calls to stay under its
+per-minute cap and then stops for the day, while NVIDIA took eight calls back to back with no pacing
+at all, so calls through it are spaced half a second apart. Nothing about the model changed, only
+which door the request goes through.
 
 I picked the model (overridable through `--model`) by checking OpenRouter's own catalogue directly.
 Good call, too: the research for this turned up a wall of confident-sounding blog rankings naming
@@ -131,15 +137,23 @@ through both would have revealed it.
 ### Search became a real tool, not a model capability
 
 No provider offers server-side search for free. So search moved out of `ModelClient` entirely and
-became `WebSearch`, a `Tool` sitting beside `Encyclopedia` and `PageFetch`, using DuckDuckGo's keyless
-HTML front end. This turned out to be a genuine improvement on the design it replaced, not a
-workaround forced by the provider swap. Because search is a `Tool` now, it's cassette-recorded and
-replayable offline exactly like every other retrieval, which the old model-driven search never was.
-That version was either a live provider call or a scripted stand-in, nothing in between. `ModelClient`
-is down to exactly one method now, which is a more honest statement of what a reasoning provider
-actually owes this harness. The scraping approach is fragile to markup changes by construction, and I
-marked it that way with this project's own `ponytail:` convention, naming the ceiling and the upgrade
-path right there in the comment.
+became `WebSearch`, a `Tool` sitting beside `Encyclopedia` and `PageFetch`. This turned out to be a
+genuine improvement on the design it replaced, not a workaround forced by the provider swap. Because
+search is a `Tool` now, it's cassette-recorded and replayable offline exactly like every other
+retrieval, which the old model-driven search never was. That version was either a live provider call
+or a scripted stand-in, nothing in between. `ModelClient` is down to exactly one method now, which is
+a more honest statement of what a reasoning provider actually owes this harness.
+
+The first version scraped DuckDuckGo's keyless HTML front end, and I marked it fragile with a
+`ponytail:` comment. It was worse than fragile. DuckDuckGo answers a client that identifies itself
+with HTTP 202 and a bot-challenge page, and 202 is a success code, so nothing raised, the parser found
+no results in a page that had none, and every search came back empty without once being recorded as a
+failure. For a while every live investigation reached exactly one publisher, Wikipedia, and reported a
+clean run. I proved it with an A/B test (the harness's own user agent got 202 and nothing, a
+browser's got 200 and ten results), declined to fix it by pretending to be a browser, measured
+GDELT's keyless API as a replacement and rejected it (throttled on about half of all calls even ten
+seconds apart), and moved to Tavily's search API with a key. `WebSearch` now treats any reply that
+isn't actually results as a failed lookup, so a blocked search can't pass for an empty one again.
 
 ## 3. Key findings
 
@@ -197,6 +211,20 @@ Four lessons here generalise well beyond this one project:
 4. **Fixes need auditing too.** The single worst defect found anywhere in this project, an untested
    hypothesis winning by default, was introduced by a fix. Not by the original build.
 
+**A verdict is only as good as the definition behind it, and a benchmark can run for a long time
+before that gap gets noticed.** The live model's actual reasoning over real evidence was correct on
+Theranos and Wirecard well before it was ever scored correctly: it ruled out "clean company" and led
+with "operates, but has adverse findings," which is exactly what those cases are built to test for.
+The benchmark still scored both wrong, because nothing had ever told the model what `supported` or
+`refuted` meant for the subject in front of it, so its own correct hypothesis and the harness's
+verdict word were talking past each other. Once every subject carried a stated proposition and a
+verdict standard (decision #12), and a run of live sweeps closed the specific hypothesis-wording and
+reasoning gaps that surfaced (decisions #12 and #13), the same live model reached 14 of 14 on the
+tuning set and 12 of 13 on a 13-case holdout set that never informed a single one of those fixes. The
+one holdout miss is itself instructive: an extraction defect on pages that restate a myth before
+debunking it, found only because the holdout set was never used to tune anything, which is the entire
+argument for keeping one.
+
 ## 4. Limitations
 
 **The shipped benchmark numbers still come from the non-reasoning stand-in, on purpose.** The free
@@ -224,18 +252,35 @@ evidence in the whole project that live verification catches a different class o
 does: `ScriptedModel` and `RehearsedModel` simply cannot write free text into a structured field, so
 neither one could ever have produced this failure, no matter how carefully either was reviewed.
 
+**Every limitation in this section up to here was written before a later session pushed the live path
+much further, and I'm leaving all of it exactly as it reads rather than editing history.** Search was
+fixed (decision #11), the model now runs against NVIDIA with real headroom (decision #10), and a long
+run of live sweeps closed most of the reasoning gaps a wider evidence base actually exposed (decisions
+#12 and #13). The result: 14 of 14 on the tuning set, 12 of 13 on a held-out set that never informed
+any of it. What follows is what's genuinely still true as of that later work, not superseded by it.
+
 **Reward weights are argued, not derived.** 0.40 / 0.25 / 0.20 / 0.15 is a defensible position about
 what matters most, but I haven't run a sensitivity analysis on it. A different reviewer could easily
 argue for different weights, and right now the harness doesn't show how conclusions shift under them.
 
-**Only one real source in the offline cassette.** The recorded retrievals are Wikipedia only, since it
-needs no key. Source-diversity scores in the shipped run are structurally capped at one because of
-this, which is exactly why `source_selection` dominates the failure counts. A live recording pass with
-real web search fixes this.
+**A specific extraction defect survived the tuning above, caught by the holdout set precisely because
+it was never used to tune anything.** Appraisal extracted "Humans use only 10 percent of their brains"
+as an assertion from two pages that were actually debunking it, one of them Wikipedia's own
+`Ten-percent-of-the-brain_myth` article, because both open by restating the myth before rejecting it,
+and the extraction caught the restatement, not the rejection. It graded those assertions at the lowest
+possible credibility, which shows something was already suspected, but Reconciliation's free-text
+reasoning called them "high-credibility" anyway and let three restatements outweigh one direct
+refutation. `goldfish-memory-claim`, the other myth case in the same set, extracted cleanly, because
+its sources state the true fact directly rather than restating the myth first. The general shape of
+the fix is clear (extract a source's own position on a claim, not any sentence that mentions it,
+which the analyst brief's "report contradictions as contradictions" doesn't currently make explicit
+enough to stop this), but fixing it now, from a holdout observation, would be exactly the kind of
+tuning-on-the-answer-key this set exists to prevent. It is next work, not done work.
 
-**The benchmark is small, and English-only.** Fourteen cases is enough to exercise every trap once,
-but not enough for real statistical confidence in any single rate. Non-English sources, jurisdictional
-records, beneficial-ownership chains: all untested.
+**The benchmark is small, and English-only.** Fourteen tuning cases and thirteen held-out ones are
+enough to exercise every trap more than once and to catch real generalisation gaps, as the one above
+shows, but still not enough for tight statistical confidence in any single rate. Non-English sources,
+jurisdictional records, beneficial-ownership chains: all untested.
 
 **Convergence is barely exercised.** Since the stand-in analyst reaches the same verdict every time,
 verdict-change and assessments-to-stable-verdict both sit at zero in the shipped run. The metrics
@@ -246,17 +291,20 @@ which was just wrong.
 
 ## 5. What I'd do next, in order
 
-1. **Clear the daily quota over a few days, or fund the account past the $10 mark**, and run the full
-   42-episode live ablation. The live path already proved it works end to end. What's missing is
-   volume, not verification. At 1,000 requests a day past $10 in lifetime credits, a full sweep turns
-   into a same-day thing instead of a multi-day one.
-2. **Add a second and third real source type** so source diversity can climb past one and
-   `source_selection` stops dominating everything: a company registry, and a news archive.
-3. **Run the reward weights as an actual sensitivity sweep** instead of just asserting them, and report
+1. **Fix Appraisal's extraction-polarity gap the holdout set found**, the one open item in section 4:
+   teach it to extract a source's own position on a claim rather than any sentence mentioning the
+   claim, verified against `ten-percent-brain-claim` specifically and then reswept against the full
+   holdout set to confirm nothing else moved.
+2. **Run a full 42-episode live ablation** now that the live path reaches 14 of 14 on its own tuning
+   set. NVIDIA's real headroom (decision #10) makes this a same-day thing rather than a multi-day one.
+3. **Add a second and third real source type** beyond what Tavily's search surfaces on its own: a
+   company registry, and a news archive, so evidence quality stops depending entirely on what one
+   search API happens to rank first.
+4. **Run the reward weights as an actual sensitivity sweep** instead of just asserting them, and report
    which conclusions hold steady across weightings and which ones are just artifacts of the choice.
-4. **Repeat each case a few times** to separate model variance from genuine memory effects. This design
+5. **Repeat each case a few times** to separate model variance from genuine memory effects. This design
    makes that cheap already, since the cassette holds retrieval fixed and only sampling varies.
-5. **Grow the archive on purpose** to test memory at a scale where interference gets more likely, and
+6. **Grow the archive on purpose** to test memory at a scale where interference gets more likely, and
    check whether the harmful-retrieval rate actually rises with archive size the way it should.
-6. **Add an adversarial case class**: a subject whose public record is deliberately contradictory
+7. **Add an adversarial case class**: a subject whose public record is deliberately contradictory
    across sources of different reliability, to push the conflict path harder than the current cases do.

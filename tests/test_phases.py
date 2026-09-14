@@ -158,16 +158,31 @@ class TestDirection:
 
         Direction(model).advance(investigation)
 
-        assert len(investigation.hypotheses) >= Direction.MINIMUM_HYPOTHESES
+        assert len(investigation.hypotheses) >= 2
 
-    def test_keeps_the_analyst_hypotheses_when_enough_are_offered(self) -> None:
+    def test_the_subjects_own_hypotheses_are_kept_and_the_analyst_can_only_add(self) -> None:
+        """This used to let three offered hypotheses replace the subject's set outright. A live run
+        showed the model's own four silently replacing a claim's set, so the hypotheses written to
+        cover every verdict are now kept, and at most two genuinely different ones are added."""
         model = ScriptedModel()
         model.script("direction", DirectionPlan(hypotheses=("First.", "Second.", "Third.")))
         investigation = Episode.opened()
 
         Direction(model).advance(investigation)
 
-        assert [h.statement for h in investigation.hypotheses] == ["First.", "Second.", "Third."]
+        statements = [h.statement for h in investigation.hypotheses]
+        assert statements[:3] == list(investigation.subject.opening_hypotheses())
+        assert statements[3:] == ["First.", "Second."]
+
+    def test_an_offered_hypothesis_restating_the_subjects_own_is_not_added_twice(self) -> None:
+        investigation = Episode.opened()
+        restated = f"  {investigation.subject.opening_hypotheses()[1].upper()} "
+        model = ScriptedModel()
+        model.script("direction", DirectionPlan(hypotheses=(restated,)))
+
+        Direction(model).advance(investigation)
+
+        assert len(investigation.hypotheses) == len(investigation.subject.opening_hypotheses())
 
     def test_falls_back_to_the_subjects_own_questions_when_none_are_proposed(self) -> None:
         model = ScriptedModel()
@@ -344,6 +359,7 @@ class TestReconciliation:
                 ),
                 judgment=Judgment.SUPPORTED,
                 probability=0.85,
+                rationale="The filing is confirmed by a reliable source.",
             ),
         )
 
@@ -355,7 +371,10 @@ class TestReconciliation:
         investigation = self._evidenced(InformationCredibility.IMPROBABLE)
         model = ScriptedModel()
         model.script(
-            "reconciliation", ReconciliationResult(judgment=Judgment.SUPPORTED, probability=0.97)
+            "reconciliation",
+            ReconciliationResult(
+                judgment=Judgment.SUPPORTED, probability=0.97, rationale="It plainly operates."
+            ),
         )
 
         Reconciliation(model).advance(investigation)
@@ -385,6 +404,7 @@ class TestReconciliation:
                 ),
                 judgment=Judgment.SUPPORTED,
                 probability=0.8,
+                rationale="Everything in the filings checks out.",
             ),
         )
 
@@ -403,13 +423,100 @@ class TestReconciliation:
         model = ScriptedModel()
         model.script(
             "reconciliation",
-            ReconciliationResult(calls=(), judgment=Judgment.REFUTED, probability=0.9),
+            ReconciliationResult(
+                calls=(),
+                judgment=Judgment.REFUTED,
+                probability=0.9,
+                rationale="The filings contradict it.",
+            ),
         )
 
         Reconciliation(model).advance(investigation)
 
         assert investigation.latest_assessment().judgment is Judgment.INSUFFICIENT_EVIDENCE
         assert investigation.latest_assessment().leading_hypothesis == ""
+
+    def test_a_reply_that_scores_nothing_and_says_nothing_leaves_the_standing_verdict(
+        self,
+    ) -> None:
+        """Found live: every field of the reply has a default, so an empty object validates, and a
+        second-round reply that was exactly that overwrote a correct `supported` at 0.92 with the
+        defaults' `insufficient_evidence` at 0.5."""
+        investigation = self._evidenced(InformationCredibility.CONFIRMED)
+        evidence_id = next(iter(investigation.evidence))
+        considered = ScriptedModel()
+        considered.script(
+            "reconciliation",
+            ReconciliationResult(
+                calls=(
+                    ConsistencyCall(
+                        hypothesis_index=0,
+                        evidence_id=evidence_id,
+                        consistency=Consistency.CONSISTENT,
+                    ),
+                ),
+                judgment=Judgment.SUPPORTED,
+                probability=0.92,
+                rationale="Filings corroborate the description.",
+            ),
+        )
+        Reconciliation(considered).advance(investigation)
+        silent = ScriptedModel()
+        silent.script("reconciliation", ReconciliationResult())
+
+        transition = Reconciliation(silent).advance(investigation)
+
+        assert investigation.latest_assessment().judgment is Judgment.SUPPORTED
+        assert investigation.latest_assessment().probability == 0.92
+        assert "standing assessment and ACH matrix stand" in transition.reason
+
+    def test_real_calls_with_no_rationale_do_not_touch_the_matrix_either(self) -> None:
+        """Found live, a second bug in the same shape: a reply carrying a real, resolvable ACH
+        matrix (`applied > 0`) reversed a well-reasoned `partially_supported` to `refuted` with an
+        empty rationale. Refusing only the verdict and not the matrix would have left the dossier
+        contradicting itself: the standing verdict kept, but the hypothesis table showing the
+        opposite hypothesis as the one every piece of evidence now confirmed."""
+        investigation = self._evidenced(InformationCredibility.CONFIRMED)
+        evidence_id = next(iter(investigation.evidence))
+        considered = ScriptedModel()
+        considered.script(
+            "reconciliation",
+            ReconciliationResult(
+                calls=(
+                    ConsistencyCall(
+                        hypothesis_index=1,
+                        evidence_id=evidence_id,
+                        consistency=Consistency.INCONSISTENT,
+                    ),
+                ),
+                judgment=Judgment.PARTIALLY_SUPPORTED,
+                probability=0.9,
+                rationale="Half of it holds up; the other half does not.",
+            ),
+        )
+        before = Reconciliation(considered).advance(investigation)
+        matrix_before = dict(investigation.hypotheses[1].consistency)
+        silent = ScriptedModel()
+        silent.script(
+            "reconciliation",
+            ReconciliationResult(
+                calls=(
+                    ConsistencyCall(
+                        hypothesis_index=1,
+                        evidence_id=evidence_id,
+                        consistency=Consistency.CONSISTENT,
+                    ),
+                ),
+                judgment=Judgment.REFUTED,
+                probability=0.95,
+            ),
+        )
+
+        Reconciliation(silent).advance(investigation)
+
+        assert investigation.latest_assessment().judgment is Judgment.PARTIALLY_SUPPORTED
+        assert investigation.hypotheses[1].consistency == matrix_before
+        assert before  # the first, reasoned transition is exercised above
 
 
 class TestReflection:
@@ -524,6 +631,13 @@ class TestBriefingMemoryModes:
         assert "NOT evidence" in rendered
         assert "never cite it" in rendered
 
+    def test_every_mode_says_what_the_verdict_is_a_verdict_on(self) -> None:
+        for mode in MemoryMode:
+            rendered = self._briefed(mode)
+
+            assert "PROPOSITION UNDER TEST: Acme Corp is a real entity" in rendered
+            assert "- insufficient_evidence: " in rendered
+
 
 class TestFullCycle:
     def _wired(self) -> tuple[dict[InvestigationPhase, Node], ScriptedModel]:
@@ -552,6 +666,7 @@ class TestFullCycle:
                 ),
                 judgment=Judgment.SUPPORTED,
                 probability=0.82,
+                rationale="The filing is confirmed by a reliable source.",
             ),
         )
         model.script("reflection", ReflectionResult(ready_to_conclude=True))
@@ -605,3 +720,16 @@ class TestFullCycle:
 
         assert investigation.phase is InvestigationPhase.COMPLETE
         assert model.prompts_seen
+
+    def test_a_reflection_that_never_concludes_still_ends_in_a_report(self) -> None:
+        """Three of the last four live runs halted without a report. Reflection held back two
+        steps for it, but the round it sent the investigation back for costs four, so under a
+        twelve-step ceiling the third round always ran the budget out before the report."""
+        nodes, model = self._wired()
+        model.script("reflection", ReflectionResult(ready_to_conclude=False))
+        investigation = Episode.opened(budget=Budget(max_steps=12))
+
+        InvestigationGraph(nodes).run(investigation)
+
+        assert investigation.phase is InvestigationPhase.COMPLETE
+        assert investigation.findings.is_written()
